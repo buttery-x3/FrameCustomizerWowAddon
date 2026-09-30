@@ -1,0 +1,18 @@
+## Interface: 16001
+## Title: FrameCustomizer
+## Notes: Inspect existing UI objects and author declarative cosmetic overrides.
+## Author: FrameCustomizer contributors
+## Version: 0.1.0
+## SavedVariables: FrameCustomizerDB, FrameCustomizerSafeMode
+## OptionalDeps: LibSharedMedia-3.0, SharedMedia
+Core/Util.lua
+Core/Properties.lua
+Core/Schema.lua
+Core/Resolver.lua
+Core/Engine.lua
+Native/Adapter.lua
+Native/Discovery.lua
+UI/Editor.lua
+Native/Playground.lua
+Bootstrap.lua
+
