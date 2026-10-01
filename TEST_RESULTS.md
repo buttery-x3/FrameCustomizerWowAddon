@@ -51,3 +51,11 @@ The opt-in `/fcu test` suite now includes delayed/repeated geometry resets and m
 4. Check denied combat/context transitions produce no prohibited writes/action-blocked errors; then confirm pause + reload recovery, resume, saved disabled flags and session undo on a supported target. Repeat relevant media/explorer checks if upgrading from 0.1.0.
 
 Any blocker should be reported by its stable code and evidence: native/access denial/unavailability, anchor representation, direct Edit Mode policy, unresolved target/relative, or advisory/unknown management. Client restrictions, hook taint, same-object Edit Mode classification and lasting appearance remain unverified. No global enforcement cadence was changed and flicker-free rendering is not promised.
+
+## Deployment configuration follow-up — 2026-10-01
+
+The development deployment script now reads the literal `FRAMECUSTOMIZER_ADDONS_PATH` setting from repository-root `.env` when `-AddOnsPath` is omitted. `.env` is Git-ignored; `.env.example` documents the setting without a local installation path. Explicit `-AddOnsPath` takes precedence. Existing destination validation, WhatIf, Update/backup and unrelated-addon protections still apply.
+
+`& ./scripts/test-deploy.ps1` passes both the original deployment checks and isolated config scenarios: missing/empty settings, duplicate assignments, unmatched quotes, nonexistent/wrong destination, unquoted/single-quoted/double-quoted paths, literal spaces/brackets/#/$(), invocation from another directory, relative configured paths, explicit override, fresh install, update backup and unrelated-addon refusal. Configuration is read as data and left unchanged. Fixtures are under `.tools/deployment-test-a7580aed3a1d49e1b86f5a0fac50c67e`; no game deployment occurred. `git diff --check` passes and `git check-ignore -v .env` confirms the ignore rule.
+
+This follow-up changes development tooling/documentation only. Addon source and its 0.3.0 package are unchanged; the Lua suite, source-reference audit and packaging were not unnecessarily rerun.

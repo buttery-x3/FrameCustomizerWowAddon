@@ -29,7 +29,7 @@ Enable FrameCustomizer in the AddOns list and enter the game:
 | `/fcu test` | Run opt-in native fixture scenarios outside combat (~27 seconds) |
 | `/fcu test stop` | Cancel and clean up the fixture test |
 
-This development pass packages the addon without deploying to the game folder. A parameterized Windows deployment script is available; see [DEVELOPMENT.md](DEVELOPMENT.md).
+This development pass packages the addon without deploying to the game folder. The Windows deployment script can remember your AddOns path in a Git-ignored `.env` file; see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Edit an object
 

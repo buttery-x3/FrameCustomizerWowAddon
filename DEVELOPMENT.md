@@ -37,7 +37,22 @@ The reference audit reads declarations and shared implementations directly from 
 
 ## Deploy
 
-Pass your chosen client's actual existing AddOns path. No destination is inferred. Examples use a placeholder you must replace:
+Save your chosen client's existing AddOns path once in a repository-root `.env` file. Copy `.env.example` to `.env` if you do not already have one, then edit this setting (the example path is a placeholder):
+
+```dotenv
+FRAMECUSTOMIZER_ADDONS_PATH="X:/your-client/Interface/AddOns"
+```
+
+`.env` is ignored by Git and excluded from addon packaging/deployment. Run from the repository root:
+
+```powershell
+& ./scripts/deploy.ps1 -WhatIf
+& ./scripts/deploy.ps1
+# For an existing recognized FrameCustomizer installation:
+& ./scripts/deploy.ps1 -Update
+```
+
+An explicit `-AddOnsPath` always takes precedence and skips the config file. No client destination is inferred. For a one-off destination:
 
 ```powershell
 & ./scripts/deploy.ps1 -AddOnsPath 'X:/your-client/Interface/AddOns' -WhatIf
@@ -45,6 +60,8 @@ Pass your chosen client's actual existing AddOns path. No destination is inferre
 # For an existing recognized FrameCustomizer installation:
 & ./scripts/deploy.ps1 -AddOnsPath 'X:/your-client/Interface/AddOns' -Update
 ```
+
+The script reads only `FRAMECUSTOMIZER_ADDONS_PATH` as literal text; it does not execute `.env`, expand variables/commands, or import other settings into the environment. Optional surrounding single/double quotes, spaces and whole-line `#` comments are supported; use separate lines for comments rather than inline comments. Relative configured paths resolve from the repository root regardless of the caller's directory. Missing/empty settings fail with setup instructions; duplicate assignments or unmatched quotes are rejected. Explicit empty `-AddOnsPath` is also rejected.
 
 Updates first copy a backup to `dist/deploy-backups/`. The script writes only allowlisted FrameCustomizer files, preserves extra files, rejects reparse-point paths and unrelated destination addons, and never deletes/moves installed files or touches WTF. Close WoW before changing metadata or adding files. Existing Lua edits can be tested with `/reload`; first installation/new metadata/assets should use a full restart. Runtime reload/file-discovery behaviour still needs confirmation in the supplied client.
 

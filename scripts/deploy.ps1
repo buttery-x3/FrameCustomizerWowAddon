@@ -1,11 +1,38 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [Parameter(Mandatory = $true)][string]$AddOnsPath,
+    [string]$AddOnsPath,
     [switch]$Update
 )
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $sourceRoot = Join-Path $workspaceRoot 'FrameCustomizer'
+if (-not $PSBoundParameters.ContainsKey('AddOnsPath')) {
+    # Read only our setting as literal data; never execute/source the .env file
+    # or import its other keys into the process environment.
+    $configPath = Join-Path $workspaceRoot '.env'
+    $foundPath = $false
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        foreach ($line in Get-Content -LiteralPath $configPath -Encoding UTF8) {
+            if ($line -notmatch '^\s*FRAMECUSTOMIZER_ADDONS_PATH\s*=(.*)$') { continue }
+            if ($foundPath) { throw 'Duplicate FRAMECUSTOMIZER_ADDONS_PATH in .env; keep one destination.' }
+            $foundPath = $true
+            $AddOnsPath = $Matches[1].Trim()
+            if ($AddOnsPath.StartsWith('"') -or $AddOnsPath.StartsWith("'")) {
+                $quote = $AddOnsPath.Substring(0, 1)
+                if ($AddOnsPath.Length -lt 2 -or -not $AddOnsPath.EndsWith($quote)) {
+                    throw 'Unmatched quotes in .env FRAMECUSTOMIZER_ADDONS_PATH.'
+                }
+                $AddOnsPath = $AddOnsPath.Substring(1, $AddOnsPath.Length - 2)
+            }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($AddOnsPath) -and -not [IO.Path]::IsPathRooted($AddOnsPath)) {
+        $AddOnsPath = Join-Path $workspaceRoot $AddOnsPath
+    }
+}
+if ([string]::IsNullOrWhiteSpace($AddOnsPath)) {
+    throw 'Set FRAMECUSTOMIZER_ADDONS_PATH in the repository .env (see .env.example), or pass -AddOnsPath.'
+}
 $targetRoot = [IO.Path]::GetFullPath($AddOnsPath).TrimEnd('\', '/')
 if (-not (Test-Path -LiteralPath $targetRoot -PathType Container)) { throw 'AddOnsPath must name an existing AddOns directory.' }
 if ((Split-Path -Leaf $targetRoot) -ne 'AddOns') { throw 'The explicit destination must be the client Interface\AddOns directory.' }
