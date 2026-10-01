@@ -1,6 +1,6 @@
 local _, FC = ...
-FC.VERSION = "0.2.0"
-FC.REVISION = "explorer-media-geometry-1"
+FC.VERSION = "0.3.0"
+FC.REVISION = "geometry-policy-1"
 FC.BLANK_TEXTURE = "Interface\\AddOns\\FrameCustomizer\\Media\\Transparent.tga"
 FC.LIMITS = { rules = 128, depth = 12, minInterval = 0.25, maxInterval = 60,
     verify = 2, resolve = 3, jobs = 12, scan = 24, nodes = 6000, children = 256 }
@@ -57,4 +57,35 @@ function U.joinTarget(t)
     if not t then return "unidentified" end
     return t.root .. (#t.keys > 0 and ("." .. table.concat(t.keys, ".")) or "")
 end
+
+-- Runtime-only findings. No native objects, optional metadata values or hook
+-- arguments belong here; reports format already inspected, safe descriptions.
+function U.finding(state,code,detail) return {state=state,code=code,detail=detail} end
+function U.geometryResult(property)
+    return {property=property,native=U.finding("not_checked","not_checked","Not checked"),
+        representation=U.finding("not_checked","not_checked","Not checked"),
+        policy=U.finding("not_checked","not_checked","Not checked"),
+        management={state="unknown",observations={}}}
+end
+function U.geometryLines(r)
+    if not r then return {"Geometry preflight: not yet checked"} end
+    local lines={}
+    for _,pair in ipairs({{"native","Required native/access checks"},{"representation","Representation"},{"policy","FrameCustomizer policy"}}) do
+        local f=r[pair[1]]
+        lines[#lines+1]=pair[2]..": "..f.state.." ["..f.code.."] - "..f.detail
+    end
+    lines[#lines+1]="External layout: "..r.management.state
+    for _,f in ipairs(r.management.observations) do
+        lines[#lines+1]="  ["..f.code.."] "..f.scope..(f.object and (" "..f.object) or " (identity unavailable)")..": "..f.detail
+    end
+    if r.management.advisory then lines[#lines+1]="Advisory: "..r.management.advisory end
+    return lines
+end
+-- Expected execution-time denial, distinct from an unexpected operation error.
+-- A private token prevents arbitrary native errors from impersonating a result.
+local deferred={}
+function U.deferGeometry(result,reason)
+    error({token=deferred,eligibility=result,reason=reason},0)
+end
+function U.isGeometryDeferred(err) return U.safe(err) and type(err)=="table" and rawget(err,"token")==deferred end
 

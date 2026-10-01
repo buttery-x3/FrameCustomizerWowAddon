@@ -110,10 +110,14 @@ function UI:chooseProperty(d)
     if rule then self.object=FC.Resolver.resolve(FC.adapter,rule.target) end
     local value=entry and entry.value or U.copy(d.default)
     self.positionReason=d.id=="position" and (not entry or not entry.enabled) and "Inaccessible: creating Position requires a readable anchor snapshot" or nil
+    self.positionFinding=self.positionReason and U.finding("inaccessible","anchor_snapshot_required",self.positionReason) or nil
     if (not entry or d.id=="position" and not entry.enabled) and self.object and FC.adapter:canRead(self.object,d) then
-        local ok,current,reason=pcall(d.read,FC.adapter,self.object)
+        local ok,current,reason,code,category=pcall(d.read,FC.adapter,self.object)
         if ok and current then local valid=d.validate(current); if valid then value=valid; self.positionReason=nil end end
-        if d.id=="position" and not current then self.positionReason=ok and reason or "Inaccessible: could not capture anchor layout" end
+        if d.id=="position" and not current then
+            self.positionReason=ok and reason or "Inaccessible: could not capture anchor layout"
+            self.positionFinding=U.finding(category or "inaccessible",code or "anchor_capture_failed",self.positionReason)
+        end
     end
     self.positionAnchors=d.id=="position" and U.copy(value.anchors) or nil
     self.draftValue=U.copy(value)
@@ -175,10 +179,19 @@ function UI:status()
     if rule then self.object=FC.Resolver.resolve(FC.adapter,rule.target) end
     local lines={}
     if self.object then
-        local allowed,why=FC.adapter:canWrite(self.object,d,entry and entry.enabled and entry.value or self.draftValue or d.default)
-        if d.id=="position" and self.positionReason and (allowed or why and why:find("Unsupported layout:",1,true)) then allowed=false; why=self.positionReason end
+        local allowed,why,_,result=FC.adapter:canWrite(self.object,d,entry and entry.enabled and entry.value or self.draftValue or d.default)
+        self.geometryResult=result
+        if d.id=="position" and self.positionReason then
+            if result then result.representation=self.positionFinding end
+            if allowed or result and result.native.state=="passed" then why=self.positionReason end
+            allowed=false
+        end
         lines[#lines+1]=allowed and "Operation available (rechecked at application)." or "Unavailable: "..(why or "unknown permission")
-        if FC.adapter:canRead(self.object,d) then
+        if result then
+            lines[#lines+1]="Native/access: "..result.native.state.."; representation: "..result.representation.state.."; policy: "..result.policy.state
+            if result.management.advisory then lines[#lines+1]="Advisory: "..result.management.advisory end
+            lines[#lines+1]="External layout: "..result.management.state..". Eligibility report shows evidence and scope."
+        elseif FC.adapter:canRead(self.object,d) then
             local ok,value=pcall(d.read,FC.adapter,self.object)
             local current=ok and value and d.validate(value)
             if current then
@@ -187,13 +200,14 @@ function UI:status()
                 if current.anchors then lines[#lines+1]=#current.anchors.." anchors preserved. Edit X/Y to translate; points and relatives stay fixed." end
             else lines[#lines+1]="Current value unavailable / outside the supported format." end
         else lines[#lines+1]=d.id=="position" and "Current anchors inaccessible; position needs a readable layout." or "Current value inaccessible; a permitted constant write does not require a baseline." end
-    else lines[#lines+1]="Target unresolved / not currently accessible." end
+    else self.geometryResult=nil; lines[#lines+1]="Target unresolved / not currently accessible." end
     local state=self.id and FC.engine.states[self.id]; local job=state and state.jobs[d.id]
     if job then lines[#lines+1]="State: "..job.status; if job.reason then lines[#lines+1]=job.reason end
     else lines[#lines+1]="Inspection only: this property has no enabled override." end
     if FC.db.paused or rule and not rule.enabled then lines[#lines+1]="Paused: no queued, hooked, or periodic writes run." end
     if not rule then lines[#lines+1]="Create an entry before enabling overrides." end
-    self.readout:SetText(table.concat(lines,"\n\n"))
+    self.readout:SetText(table.concat(lines,d.permission=="geometry" and "\n" or "\n\n"))
+    show(self.eligibilityReport,d.permission=="geometry")
     show(self.override,rule~=nil and not FC.readOnlyData); show(self.commit,rule~=nil and not FC.readOnlyData)
 end
 function UI:rows()
@@ -482,6 +496,14 @@ function UI:build()
         if entry then text=text.."\n\nConfigured anchors (enabled="..tostring(entry.enabled).."):\n"..FC.Anchors.details(entry.value) end
         self:report(text,"Position anchor details")
     end); at(self.anchorDetails,self.form,130,276)
+    self.eligibilityReport=button(self.form,"Eligibility report",125,function()
+        local d=self.property; if not d then return end
+        local entry=self:rule() and self:rule().overrides[d.id]
+        local text="Target: "..U.joinTarget(self.target or self:rule() and self:rule().target).."\n"..d.id.." override: "..(entry and entry.enabled and "enabled" or "disabled")
+        text=text.."\nLast inspector preflight:\n"..table.concat(U.geometryLines(self.geometryResult),"\n")
+        if self.id then text=text.."\n\n"..FC.engine:diagnostics(self.id) end
+        self:report(text,"Geometry eligibility and enforcement")
+    end); at(self.eligibilityReport,self.form,260,276)
     self.help=label(f,"",11); at(self.help,f,365,576); self.help:SetWidth(220); self.help:SetHeight(90)
     self.readout=label(self.form,"",11); at(self.readout,self.form,0,310); self.readout:SetPoint("TOPRIGHT",self.form,"TOPRIGHT",0,-310); self.readout:SetHeight(130)
     self.notice=label(f,"",11); self.notice:SetPoint("BOTTOMLEFT",365,62); self.notice:SetPoint("BOTTOMRIGHT",f,"BOTTOMRIGHT",-25,62); self.notice:SetHeight(42)

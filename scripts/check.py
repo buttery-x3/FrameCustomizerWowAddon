@@ -52,4 +52,5 @@ for file in files:
     load(native, "FrameCustomizer/" + file, ns)
 native_count = load(native, "tests/native_spec.lua", ns)
 revision_count = load(native, "tests/revision_spec.lua", ns)
-print(f"ALL CHECKS PASSED: {core_count} core scenarios; {native_count} native-adapter/load/UI-recording scenarios; {revision_count} explorer/media/geometry regressions", flush=True)
+geometry_count = load(native, "tests/geometry_policy_spec.lua", ns)
+print(f"ALL CHECKS PASSED: {core_count} core scenarios; {native_count} native-adapter/load/UI-recording scenarios; {revision_count} explorer/media/geometry regressions; {geometry_count} geometry policy scenarios", flush=True)

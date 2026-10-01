@@ -2,7 +2,7 @@
 ## Title: FrameCustomizer
 ## Notes: Inspect existing UI objects and author declarative cosmetic overrides.
 ## Author: FrameCustomizer contributors
-## Version: 0.2.0
+## Version: 0.3.0
 ## SavedVariables: FrameCustomizerDB, FrameCustomizerSafeMode
 ## OptionalDeps: LibSharedMedia-3.0, SharedMedia
 ## X-FrameCustomizer-Assets: Media/Transparent.tga

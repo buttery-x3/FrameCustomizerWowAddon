@@ -50,6 +50,7 @@ with ZipFile(args.zip) as archive:
     for name in ("SetSize", "SetPoint", "ClearAllPoints"):
         method("SimpleScriptRegionResizingAPIDocumentation", name, "IsProtectedFunction = true")
     method("SimpleScriptRegionResizingAPIDocumentation", "GetPoint", "SecretWhenAnchoringSecret = true")
+    method("SimpleScriptRegionResizingAPIDocumentation", "GetNumPoints", 'Type = "number"')
     method("SimpleScriptRegionResizingAPIDocumentation", "SetPoint", "CheckAllowInheritForbiddenLayoutAspects = true", 'Type = "ScriptRegion"')
     for name in ("ClearPoint", "AdjustPointsOffset", "SetPointsOffset", "ClearPointsOffset"):
         method("SimpleScriptRegionResizingAPIDocumentation", name, "IsProtectedFunction = true")
@@ -68,6 +69,7 @@ with ZipFile(args.zip) as archive:
         "Blizzard_SharedXML/SecureScrollTemplates.xml": ['name="UIPanelScrollFrameTemplate"'],
         "Blizzard_EditMode/Shared/EditModeManager.lua": ["registeredSystemFrames", "RegisterSystemFrame", "GetActiveLayoutInfo"],
         "Blizzard_EditMode/Shared/EditModeSystemTemplates.lua": ["RegisterSystemFrame(self)", "systemInfo.anchorInfo"],
+        "Blizzard_APIDocumentationGenerated/ForbiddenAspectConstantsDocumentation.lua": ['Name = "UntrustedLayoutScriptExecution"', "Propagates to any children of this object, and anything anchored to to this object"],
         "Blizzard_SharedXML/LayoutFrame.lua": ["IsLayoutFrame", "layoutIndex", "ignoreInLayout"],
         "Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua": ['UIPanelWindows[frame:GetName()]', 'UIPanelLayout-defined', 'centerFrameSkipAnchoring'],
         "Blizzard_SharedXMLBase/Pools.lua": ["function ObjectPoolBaseMixin:Acquire()", "function ObjectPoolBaseMixin:Release("],
@@ -78,6 +80,38 @@ with ZipFile(args.zip) as archive:
         for fragment in fragments:
             assert fragment in text, (file, fragment)
         checks += 1
+
+    # Audit the exact observational policy evidence, not just manager names.
+    templates = source("Blizzard_EditMode/Shared/EditModeSystemTemplates.lua")
+
+    def implementation(owner, name, *fragments):
+        global checks
+        start = templates.index(f"function {owner}:{name}(")
+        end = templates.find("\nfunction ", start + 1)
+        body = templates[start:end if end != -1 else len(templates)]
+        for fragment in fragments:
+            assert fragment in body, (owner, name, fragment)
+        checks += 1
+
+    implementation("EditModeSystemMixin", "OnSystemLoad", "RegisterSystemFrame(self)")
+    implementation("EditModeSystemMixin", "OnDragStart", "self:CanBeMoved()", "self:StartMoving()")
+    implementation("EditModeSystemMixin", "CanBeMoved", "self.isSelected and not self.isLocked")
+    implementation("EditModeSystemMixin", "HasSetting", "self.settingMap[setting] ~= nil")
+    implementation("EditModeSystemMixin", "ApplySystemAnchor", "self:SetPoint(self.systemInfo.anchorInfo.point")
+    for axis in ("Width", "Height"):
+        implementation("EditModeChatFrameSystemMixin", "UpdateSystemSetting" + axis,
+                       f"self:HasSetting(Enum.EditModeChatFrameSetting.{axis}Hundreds)",
+                       f"self:HasSetting(Enum.EditModeChatFrameSetting.{axis}TensAndOnes)", "self:SetSize(")
+        implementation("EditModeDamageMeterSystemMixin", "UpdateSystemSettingFrame" + axis,
+                       f"self:GetSettingValue(Enum.EditModeDamageMeterSetting.Frame{axis})", "self:SetSize(")
+        implementation("EditModeSwingTimerSystemMixin", "UpdateSystemSetting" + axis,
+                       f"self:Set{axis}(self:GetSettingValue(Enum.EditModeSwingTimerSetting.{axis}))")
+    implementation("EditModeStatusTrackingBarSystemMixin", "UpdateSystemSetting",
+                   "self:HasSetting(Enum.EditModeStatusTrackingBarSetting.Size)", "self:SetSize(")
+    # Counterexamples: a 'size' label or unit-frame width setting alone is NOT
+    # evidence of a same-object native SetSize control.
+    implementation("EditModeUnitFrameSystemMixin", "UpdateSystemSettingFrameSize", "self:SetScale(")
+    implementation("EditModeUnitFrameSystemMixin", "UpdateSystemSettingFrameWidth", "self:UpdateCompactRaidFrameContainerSetting(")
 print(f"REFERENCE PASS: {checks} declaration/shared-source contracts; ZIP read-only; no exported Lua executed")
 print("SHA256 " + hashlib.sha256(args.zip.read_bytes()).hexdigest())
 

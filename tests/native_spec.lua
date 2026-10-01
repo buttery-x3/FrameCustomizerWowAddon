@@ -49,13 +49,14 @@ test("geometry protects exact operation; unrelated cosmetics remain usable",func
     frame.anchorRestricted=true; assert(not A:canWrite(frame,P.byID.position,P.byID.position.default)); frame.anchorRestricted=false
     frame.forbiddenAspects.UntrustedLayoutScriptExecution=true; assert(not A:canWrite(frame,P.byID.size,P.byID.size.default))
 end)
-test("Edit Mode registry ownership only blocks geometry",function()
+test("Edit Mode position policy and advisory metadata leave other properties eligible",function()
     local f=CreateFrame("Frame","ManagedNative",UIParent); f:SetPoint("CENTER",UIParent,"CENTER",0,0); f.userPlaced=true; f.movable=true; f.resizable=true
-    assert(not A:canWrite(f,P.byID.position,P.byID.position.default))
+    assert(A:canWrite(f,P.byID.position,P.byID.position.default))
+    f.OnDragStart=EditModeSystemMixin.OnDragStart
     EditModeManagerFrame=CreateFrame("Frame","EditModeManagerFrame",UIParent); EditModeManagerFrame.layoutInfo={}; EditModeManagerFrame.registeredSystemFrames={f}
     assert(not A:canWrite(f,P.byID.position,P.byID.position.default)); assert(A:canWrite(f,P.byID.opacity,{alpha=0.5}))
     EditModeManagerFrame.registeredSystemFrames={}; assert(A:canWrite(f,P.byID.position,P.byID.position.default))
-    f.layoutIndex=1; assert(not A:canWrite(f,P.byID.size,P.byID.size.default)); f.layoutIndex=nil
+    f.layoutIndex=1; assert(A:canWrite(f,P.byID.size,P.byID.size.default)); f.layoutIndex=nil
     f.userPlaced=false; f.movable=false; f.resizable=false
     assert(A:canWrite(f,P.byID.position,P.byID.position.default)); assert(A:canWrite(f,P.byID.size,P.byID.size.default))
 end)
@@ -99,10 +100,10 @@ test("media fallback, copyable diagnostics and picker event path",function()
 end)
 test("native scenario orchestrator uses same engine, cleans up and bounds hooks",function()
     -- This checks the orchestration offline, NOT the truth of native results.
-    SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(24); assert(not FC.Playground.run)
+    SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(30); assert(not FC.Playground.run)
     assert(FC.Playground.lastReport and not FC.Playground.lastReport:find("FAIL",1,true),FC.Playground.lastReport)
     local first=N.hooks
-    SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(24); assert(not FC.Playground.run)
+    SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(30); assert(not FC.Playground.run)
     assert(not FC.Playground.lastReport:find("FAIL",1,true),FC.Playground.lastReport)
     assert(N.hooks==first,"Repeated test run accumulated hooks")
     assert(not FC.Playground.testFixtures.root:IsShown())

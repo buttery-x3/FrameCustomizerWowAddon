@@ -17,7 +17,8 @@ end
 local function boolCall(o,key)
     local f=method(o,key); if not f then return nil end
     local value=f(o)
-    if safe(value) and type(value)=="boolean" then return value end
+    if not safe(value) then return nil,"inaccessible" end
+    if type(value)=="boolean" then return value end
 end
 local aspects={GetAlpha={"Alpha"},GetVertexColor={"VertexColor","Alpha"},GetTextColor={"VertexColor","Alpha"},
     GetStatusBarColor={"VertexColor","Alpha"},GetName={"ObjectName"},GetObjectType={"ObjectType"},
@@ -116,98 +117,203 @@ end
 -- Native gates, known managers, and representation policy are separate. None
 -- of the movement/persistence flags establishes permission for SetPoint/SetSize.
 function A:geometryNative(o,relative)
+    local accessible,reason=self:inspectable(o)
+    if not accessible then return false,reason,true,"object_access","inaccessible" end
     for _,key in ipairs({"IsAnchoringRestricted","IsAnchoringSecret"}) do
-        local v=boolCall(o,key)
-        if v==nil then return false,"Safety policy: native "..key.." check unavailable",true end
-        if v then return false,(key=="IsAnchoringSecret" and "Inaccessible: secret anchoring" or "Native restriction: anchoring restricted"),true end
+        local v,unavailable=boolCall(o,key)
+        if unavailable then return false,"Inaccessible: native "..key.." result",true,"native_result_inaccessible","inaccessible" end
+        if v==nil then return false,"Required check unavailable: "..key,true,"native_check_unavailable","unavailable" end
+        if v then return false,(key=="IsAnchoringSecret" and "Inaccessible: secret anchoring" or "Native restriction: anchoring restricted"),true,key=="IsAnchoringSecret" and "anchoring_secret" or "anchoring_restricted",key=="IsAnchoringSecret" and "inaccessible" or "denied" end
     end
     local parent=self:parent(o)
-    if not parent then return false,"Inaccessible: geometry requires an accessible parent",true end
+    if not parent then return false,"Inaccessible: geometry requires an accessible parent",true,"parent_inaccessible","inaccessible" end
     for _,object in ipairs({o,parent,relative or parent}) do
         local f=method(object,"HasAnyForbiddenAspects")
         local aspect=Enum and Enum.ForbiddenAspect and Enum.ForbiddenAspect.UntrustedLayoutScriptExecution
-        if not self:inspectable(object) or not f or not aspect then return false,"Safety policy: layout permission check unavailable",true end
+        if not self:inspectable(object) or not f or not aspect then return false,"Required check unavailable: forbidden layout permission",true,"layout_check_unavailable","unavailable" end
         local forbidden=f(object,aspect)
-        if not safe(forbidden) then return false,"Inaccessible: layout permission result",true end
-        if type(forbidden)~="boolean" then return false,"Safety policy: layout permission check returned no boolean",true end
-        if forbidden then return false,"Native restriction: forbidden layout inheritance",true end
+        if not safe(forbidden) then return false,"Inaccessible: layout permission result",true,"layout_result_inaccessible","inaccessible" end
+        if type(forbidden)~="boolean" then return false,"Required check unavailable: layout permission returned no boolean",true,"layout_result_unavailable","unavailable" end
+        if forbidden then return false,"Native restriction: forbidden layout inheritance",true,"layout_forbidden","denied" end
     end
-    if not C_RestrictedActions or type(C_RestrictedActions.CheckAllowProtectedFunctions)~="function" then return false,"Safety policy: protected-operation permission API unavailable",true end
+    if not C_RestrictedActions or type(C_RestrictedActions.CheckAllowProtectedFunctions)~="function" then return false,"Required check unavailable: protected-operation permission API",true,"protected_check_unavailable","unavailable" end
     local allowed=C_RestrictedActions.CheckAllowProtectedFunctions(o,true)
-    if not safe(allowed) then return false,"Inaccessible: protected-operation permission result",true end
-    if type(allowed)~="boolean" then return false,"Safety policy: protected permission check returned no boolean",true end
-    if allowed~=true then return false,"Native restriction: protected operation denied in current context",true end
+    if not safe(allowed) then return false,"Inaccessible: protected-operation permission result",true,"protected_result_inaccessible","inaccessible" end
+    if type(allowed)~="boolean" then return false,"Required check unavailable: protected permission returned no boolean",true,"protected_result_unavailable","unavailable" end
+    if allowed~=true then return false,"Native restriction: protected operation denied in current context",true,"protected_denied","denied" end
     return true
 end
-function A:geometryOwnership(o)
-    if self:isFixture(o) then return true end
+-- Optional observations never establish native permission or inherited policy.
+-- Inspect data/function identities only; never call Layout, reset, or Edit Mode
+-- methods. A partial scan is unknown, not a reason to deny an unrelated edit.
+local function optional(t,key)
+    if not safe(t) or type(t)~="table" then return nil,false end
+    local v=rawget(t,key)
+    if not safe(v) then return nil,false end
+    return v,true
+end
+local function sameMethod(o,mixin,key)
+    local source=optional(rawget(_G,mixin),key)
+    return type(source)=="function" and method(o,key)==source
+end
+-- Source-backed contracts, keyed by mixin functions, NOT frame names. These
+-- handlers change self's dimensions, unlike scale/child/internal-size settings.
+local dimensionControls={
+    {"EditModeChatFrameSystemMixin","UpdateSystemSettingWidth","EditModeChatFrameSetting","WidthHundreds","WidthTensAndOnes"},
+    {"EditModeChatFrameSystemMixin","UpdateSystemSettingHeight","EditModeChatFrameSetting","HeightHundreds","HeightTensAndOnes"},
+    {"EditModeDamageMeterSystemMixin","UpdateSystemSettingFrameWidth","EditModeDamageMeterSetting","FrameWidth"},
+    {"EditModeDamageMeterSystemMixin","UpdateSystemSettingFrameHeight","EditModeDamageMeterSetting","FrameHeight"},
+    {"EditModeSwingTimerSystemMixin","UpdateSystemSettingWidth","EditModeSwingTimerSetting","Width"},
+    {"EditModeSwingTimerSystemMixin","UpdateSystemSettingHeight","EditModeSwingTimerSetting","Height"},
+    {"EditModeStatusTrackingBarSystemMixin","UpdateSystemSetting","EditModeStatusTrackingBarSetting","Size"},
+}
+function A:geometryManagement(o,setting)
+    local m={state="none_observed",observations={},scanned=true}
+    local policy=U.finding("allowed","no_edit_mode_control_observed","No matching Edit Mode control observed; classification is not exhaustive")
+    local unknown,involved=false,false
+    local function observe(code,scope,object,detail,isUnknown)
+        -- Resolve a real identity or leave it absent; never invent ancestry paths.
+        local target=object and FC.Resolver.describe(self,object)
+        m.observations[#m.observations+1]={code=code,scope=scope,object=target and U.joinTarget(target) or nil,detail=detail}
+        if isUnknown then unknown=true else involved=true end
+    end
     local manager=rawget(_G,"EditModeManagerFrame")
-    if not self:inspectable(manager) then return false,"Safety policy: Edit Mode registry unavailable; ownership unverified",true end
-    local registry=U.field(manager,"registeredSystemFrames")
-    local loaded=U.field(manager,"layoutInfo") or U.field(manager,"overrideLayoutInfo")
-    if type(registry)~="table" or type(loaded)~="table" or #registry>256 then return false,"Safety policy: Edit Mode registry not ready / exceeds inspection bound",true end
-    local panels=rawget(_G,"UIPanelWindows")
-    if not safe(panels) or panels~=nil and type(panels)~="table" then return false,"Inaccessible: UI panel registry",true end
-    local chain=o
-    for _=0,FC.LIMITS.depth do
-        if chain==UIParent then return true end
-        if not chain or not self:inspectable(chain) then return false,"Safety policy: unknown layout ancestry",true end
+    local registry=self:inspectable(manager) and optional(manager,"registeredSystemFrames") or nil
+    local registered={}; local unknownEntry=false
+    if type(registry)~="table" or #registry>256 then
+        observe("edit_mode_registry_unknown","registry",nil,"Edit Mode registration unavailable or beyond inspection bound",true)
+    else
         for i=1,#registry do
-            local v=registry[i]
-            if not safe(v) then return false,"Inaccessible: Edit Mode registry entry",true end
-            if v==chain then return false,"Managed layout: Edit Mode owns geometry on this object or an ancestor",true end
+            local object,ok=optional(registry,i)
+            if not ok or not self:inspectable(object) then
+                if not unknownEntry then observe("edit_mode_entry_unknown","registry",nil,"An Edit Mode registration is inaccessible",true); unknownEntry=true end
+            else registered[object]=true end
+        end
+    end
+    local panels=rawget(_G,"UIPanelWindows")
+    if not safe(panels) or type(panels)~="table" then
+        panels=nil; observe("panel_registry_unknown","registry",nil,"UI-panel registry unavailable or inaccessible",true)
+    end
+    local chain=o
+    for depth=0,FC.LIMITS.depth do
+        if chain==UIParent then break end
+        local scope=depth==0 and "target" or "ancestor"
+        if not chain or not self:inspectable(chain) then
+            observe("ancestry_unknown",scope,nil,"Optional layout ancestry unavailable",true); break
+        end
+        if registered[chain] then
+            observe("edit_mode_registration",scope,chain,"Direct registry match on this object; ancestry alone does not identify the selected property's control")
+            if depth==0 then
+                if setting=="position" then
+                    -- Registration plus the exported generic movement handler
+                    -- proves this system exposes position. Selection/lock state
+                    -- is temporary and is not an operation permission predicate.
+                    if sameMethod(chain,"EditModeSystemMixin","OnDragStart") then
+                        policy=U.finding("blocked","edit_mode_position","Use Blizzard Edit Mode for this object's position")
+                        observe("edit_mode_position_control",scope,chain,"Property-specific evidence: registered system uses the exported Edit Mode movement handler")
+                    else
+                        observe("edit_mode_position_unclassified",scope,chain,"Registered system's position control could not be classified",true)
+                    end
+                else
+                    local matched=false
+                    local settings=optional(chain,"settingMap")
+                    for _,control in ipairs(dimensionControls) do
+                        if sameMethod(chain,control[1],control[2]) then
+                            local enum=optional(Enum,control[3]); local present=true
+                            for i=4,#control do
+                                local key=optional(enum,control[i])
+                                local entry=key~=nil and optional(settings,key) or nil
+                                if type(entry)~="table" then present=false end
+                            end
+                            if present then matched=true; break end
+                        end
+                    end
+                    if matched then
+                        policy=U.finding("blocked","edit_mode_size","Use Blizzard Edit Mode for this object's dimensions (Size writes both width and height)")
+                        observe("edit_mode_size_control",scope,chain,"Property-specific evidence: active setting and exported handler for this object's dimensions")
+                    else
+                        observe("edit_mode_size_unclassified",scope,chain,"No supported same-object dimension control identified; scale and internal/child settings are not SetSize evidence",true)
+                    end
+                end
+            end
         end
         local name=self:name(chain)
         if panels and name then
-            local entry=rawget(panels,name)
-            if not safe(entry) then return false,"Inaccessible: UI panel metadata",true end
-            if entry~=nil then return false,"Managed layout: Blizzard UI panel registry owns this object or an ancestor",true end
+            local entry,ok=optional(panels,name)
+            if not ok then observe("panel_entry_unknown",scope,chain,"UI-panel entry inaccessible",true)
+            elseif entry~=nil then observe("ui_panel_registry",scope,chain,"UI-panel registry match") end
         end
         if method(chain,"GetAttribute") then
             local ok,defined=self:read(chain,"GetAttribute","UIPanelLayout-defined")
-            if not ok then return false,"Inaccessible: UI panel layout attributes",true end
-            if defined then return false,"Managed layout: Blizzard UI panel layout attributes",true end
+            if not ok then observe("panel_attributes_unknown",scope,chain,"Optional UI-panel attributes inaccessible",true)
+            elseif defined then observe("ui_panel_attribute",scope,chain,"UIPanelLayout-defined attribute") end
         end
-        for _,key in ipairs({"systemInfo","IsLayoutFrame"}) do
-            local v=rawget(chain,key)
-            if not safe(v) then return false,"Inaccessible: layout metadata",true end
-            if v~=nil and v~=false then return false,"Managed layout: "..key.." on object or ancestor",true end
+        for _,key in ipairs({"IsLayoutFrame","systemInfo","system","layoutIndex","Layout","SetFixedFrameStrata"}) do
+            local v,ok=optional(chain,key)
+            if not ok then observe("layout_hint_unknown",scope,chain,"Optional "..key.." hint inaccessible",true)
+            elseif v~=nil and v~=false then
+                observe(key=="IsLayoutFrame" and "shared_layout_marker" or "layout_hint",scope,chain,
+                    (key=="IsLayoutFrame" and "Shared layout marker: " or "Heuristic hint: ")..key.." (not property ownership proof)")
+            end
         end
-        for _,key in ipairs({"system","layoutIndex","Layout","SetFixedFrameStrata"}) do
-            local v=rawget(chain,key)
-            if not safe(v) then return false,"Inaccessible: layout metadata",true end
-            if v~=nil and v~=false then return false,"Safety policy: possible layout ownership ("..key.."); not a native API denial",true end
-        end
+        if depth==FC.LIMITS.depth then observe("ancestry_bound",scope,chain,"Optional ancestry scan reached its bound",true); break end
         chain=self:parent(chain)
     end
-    return false,"Safety policy: layout ancestry exceeds inspection bound",false
+    m.state=unknown and (involved and "observed_and_unknown" or "unknown") or (involved and "observed" or "none_observed")
+    if involved then m.advisory="Blizzard may reset this "..setting.."; enforcement remains enabled for eligible overrides."
+    elseif unknown then m.advisory="Management is partly unknown; required operation checks still apply." end
+    return m,policy
 end
-function A:geometryPermission(o,d,value)
-    local allowed,why,retry=self:geometryNative(o)
-    if not allowed then return false,why,retry end
-    allowed,why,retry=self:geometryOwnership(o)
-    if not allowed then return false,why,retry end
+function A:geometryRepresentation(o,d,value,r)
+    value=value or d.default
     if d.setting=="size" then
         local ok,n=self:read(o,"GetNumPoints")
-        if not ok then return false,"Inaccessible: size anchor count",true end
-        if not U.number(n,0,1) then return false,"Unsupported layout: multiple anchors may constrain size; preserved-anchor translation remains available",true end
-        return true
+        if not ok then return U.finding("inaccessible","anchor_count_inaccessible","Inaccessible: size anchor count") end
+        if not U.number(n,0,8) or n%1~=0 then return U.finding("unsupported","anchor_count_invalid","Unsupported layout: invalid anchor count") end
+        if n>1 then return U.finding("unsupported","size_multiple_anchors","Unsupported layout: multiple anchors may constrain size; preserved-anchor translation remains available") end
+    else
+        local anchors,reason,code,state=FC.Anchors.snapshot(self,o)
+        if not anchors then return U.finding(state,code,reason) end
+        for _,anchor in ipairs(anchors) do
+            local ok,err,_,nativeCode,nativeState=self:geometryNative(o,anchor.relative)
+            if not ok then r.native=U.finding(nativeState,nativeCode,err) end
+        end
+        local compatible,err,why,category=FC.Anchors.compatible(self,o,value or d.default,anchors)
+        if not compatible then return U.finding(category,why,err) end
+        if not value.anchors and anchors[1].point~=value.point and not method(o,"ClearAllPoints") then
+            r.native=U.finding("unavailable","setter_missing","Native capability unavailable: sole-point change requires ClearAllPoints")
+        end
     end
-    local anchors,reason=FC.Anchors.snapshot(self,o)
-    if not anchors then return false,reason,true end
-    for _,anchor in ipairs(anchors) do
-        local ok,err,again=self:geometryNative(o,anchor.relative)
-        if not ok then return false,err,again end
+    return U.finding("supported","representation_supported",d.setting=="size" and "Zero or one anchor" or "Readable, compatible anchors; relationships preserved")
+end
+function A:geometryPermission(o,d,value)
+    local r=U.geometryResult(d.setting)
+    r.management,r.policy=self:geometryManagement(o,d.setting)
+    local allowed,why,_,code,state=self:geometryNative(o)
+    r.native=allowed and U.finding("passed","native_passed","Passed at last preflight; rechecked at execution") or U.finding(state,code,why)
+    r.representation=self:geometryRepresentation(o,d,value,r)
+    for _,field in ipairs({"native","representation","policy"}) do
+        local f=r[field]
+        if f.state~="passed" and f.state~="supported" and f.state~="allowed" then return false,f.detail,true,r end
     end
-    local compatible,err=FC.Anchors.compatible(self,o,value or d.default,anchors)
-    if not compatible then return false,err,true end
-    return true
+    return true,nil,nil,r
+end
+function A:prepareGeometry(o,d,value)
+    local ok,why,_,result=self:canWrite(o,d,value)
+    if not ok then U.deferGeometry(result,why) end
 end
 function A:canWrite(o,d,value)
-    local ok,why=self:inspectable(o); if not ok then return false,why,true end
-    if self:excluded(o) then return false,"Editor/root infrastructure is not editable",false end
-    if not FC.Properties.applicable(d,self:kind(o)) then return false,"Unsupported object type",false end
-    for _,key in ipairs(d.writes) do if not method(o,key) then return false,"Native capability unavailable: missing method "..key,false end end
+    local function deny(field,state,code,why,retry)
+        local result
+        if d.permission=="geometry" then result=U.geometryResult(d.setting); result[field]=U.finding(state,code,why) end
+        return false,why,retry,result
+    end
+    local ok,why=self:inspectable(o); if not ok then return deny("native","inaccessible","object_access",why,true) end
+    if self:excluded(o) then return deny("policy","blocked","infrastructure","Editor/root infrastructure is not editable",false) end
+    if not FC.Properties.applicable(d,self:kind(o)) then return deny("representation","unsupported","object_type","Unsupported object type",false) end
+    for _,key in ipairs(d.writes) do
+        if not method(o,key) then return deny("native","unavailable","setter_missing","Native capability unavailable: missing method "..key,false) end
+    end
     if d.permission=="geometry" then return self:geometryPermission(o,d,value) end
     if d.permission=="texture" then
         if not self:noForbidden(o,"SetTexture") then return false,"Texture changes forbidden or permission check unavailable",true end
@@ -231,16 +337,23 @@ end
 function A:write(o,key,...)
     -- Called only after definition-level permission checks. Recheck object
     -- access for coordinated setters and the status bar's current fill.
-    if not writable[key] or not self:inspectable(o) then error("FrameCustomizer: operation no longer accessible") end
+    local geometry=key=="SetPoint" or key=="ClearAllPoints" or key=="SetSize"
+    if not writable[key] or not geometry and not self:inspectable(o) then error("FrameCustomizer: operation no longer accessible") end
     if key=="SetTexture" or key=="SetAtlas" then
         if not self:noForbidden(o,"SetTexture") then error("FrameCustomizer: texture permission changed") end
     end
-    if key=="SetPoint" or key=="ClearAllPoints" or key=="SetSize" then
+    if geometry then
         local _,relative=...
-        local allowed,why=self:geometryNative(o,key=="SetPoint" and relative or nil)
-        if not allowed then error("FrameCustomizer: "..why) end
-        local owned,reason=self:geometryOwnership(o)
-        if not owned then error("FrameCustomizer: "..reason) end
+        local result=U.geometryResult(key=="SetSize" and "size" or "position")
+        result.management,result.policy=self:geometryManagement(o,result.property)
+        local allowed,why,_,code,state=self:geometryNative(o,key=="SetPoint" and relative or nil)
+        result.native=allowed and U.finding("passed","native_passed","Passed at setter preflight") or U.finding(state,code,why)
+        if not allowed then U.deferGeometry(result,why) end
+        if result.policy.state=="blocked" then U.deferGeometry(result,result.policy.detail) end
+        if not method(o,key) then
+            result.native=U.finding("unavailable","setter_missing","Native capability unavailable: missing method "..key)
+            U.deferGeometry(result,result.native.detail)
+        end
     end
     local f=method(o,key); if not f then error("FrameCustomizer: method unavailable") end
     local success=f(o,...)

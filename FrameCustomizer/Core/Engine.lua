@@ -60,7 +60,8 @@ function E:sync()
                 local same=previous and U.equal(old[id].rule.target,rule.target)
                 local j={id=id,state=state,entry=entry,def=d,due=self.a:now(),dirty=true,errors=0,status="pending",
                     baseline=same and previous.baseline or nil,baselineObject=same and previous.baselineObject or nil,
-                    writes=same and previous.writes or 0,checks=same and previous.checks or 0}
+                    writes=same and previous.writes or 0,checks=same and previous.checks or 0,
+                    eligibility=same and previous.eligibility or nil}
                 state.jobs[d.id]=j; self.jobs[#self.jobs+1]=j
                 if not self:active(j) then j.status="disabled" end
                 if state.conflict then j.status="blocked"; j.reason="Multiple enabled entries share this target; disable the duplicate entries." end
@@ -94,10 +95,27 @@ function E:failure(j)
     if j.errors>=3 then j.suspended=true; j.reason="Suspended after 3 operation errors. Fix the cause, then Apply Now." end
     j.due=self.a:now()+math.min(30,2^(j.errors-1))
 end
+function E:deferred(j,err,now)
+    if not U.isGeometryDeferred(err) then return false end
+    -- Expected permission/topology changes do not accumulate error backoff.
+    local result=err.eligibility
+    if result then
+        -- Keep earlier independent findings when only one execution check ran.
+        if j.eligibility then
+            for _,field in ipairs({"native","representation","policy"}) do
+                if result[field].state=="not_checked" then result[field]=j.eligibility[field] end
+            end
+            if not result.management.scanned then result.management=j.eligibility.management end
+        end
+        j.eligibility=result
+    end
+    j.status="blocked"; j.reason=err.reason; j.dirty=true; j.due=now+FC.LIMITS.resolve
+    return true
+end
 function E:process(j,now)
     local o,why=R.resolve(self.a,j.state.rule.target)
     if not o then
-        self:unwatch(j); j.object=nil; j.status=why and why:find("ambiguous",1,true) and "ambiguous" or (why and why:find("blocked",1,true) and "blocked" or "unresolved")
+        self:unwatch(j); j.object=nil; j.eligibility=nil; j.status=why and why:find("ambiguous",1,true) and "ambiguous" or (why and why:find("blocked",1,true) and "blocked" or "unresolved")
         j.reason=why; j.due=now+FC.LIMITS.resolve; return
     end
     if o~=j.object then
@@ -106,7 +124,8 @@ function E:process(j,now)
         self:watch(j,o)
     end
     if not P.applicable(j.def,self.a:kind(o)) then j.status="blocked"; j.reason="Object type no longer supports property"; j.due=now+FC.LIMITS.resolve; return end
-    local permitted,reason,retry=self.a:canWrite(o,j.def,j.entry.value)
+    local permitted,reason,retry,eligibility=self.a:canWrite(o,j.def,j.entry.value)
+    j.eligibility=eligibility
     if not permitted then
         j.status="blocked"; j.reason=reason; j.due=retry and now+FC.LIMITS.resolve or math.huge
         return
@@ -130,7 +149,10 @@ function E:process(j,now)
         self.writing[o]=true
         local ok,err=pcall(j.def.write,self.a,o,j.entry.value)
         self.writing[o]=nil
-        if not ok then self.a:onError(err); self:failure(j); return end
+        if not ok then
+            if not self:deferred(j,err,now) then self.a:onError(err); self:failure(j) end
+            return
+        end
         j.writes=j.writes+1; self.stats.writes=self.stats.writes+1
         -- A successful write does not establish a matched or rendered value.
         j.status=current and "pending" or "constant applied but current value inaccessible"
@@ -156,7 +178,7 @@ function E:tick()
             local ok,err=pcall(self.process,self,j,now)
             -- An unexpected read/adapter error must not leave a guard set.
             if j.object then self.writing[j.object]=nil end
-            if not ok then self.a:onError(err); self:failure(j) end
+            if not ok and not self:deferred(j,err,now) then self.a:onError(err); self:failure(j) end
             work=work+1
             if work>=FC.LIMITS.jobs then break end
         end
@@ -175,7 +197,7 @@ function E:undo(id)
             self.writing[o]=true
             local ok,err=pcall(j.def.write,self.a,o,j.baseline)
             self.writing[o]=nil
-            if ok then count=count+1 else self.a:onError(err) end
+            if ok then count=count+1 elseif not U.isGeometryDeferred(err) then self.a:onError(err) end
         end
     end
     self:sync()
@@ -194,7 +216,10 @@ function E:diagnostics(id)
             if j then
                 local mode=j.entry.periodic
                 if mode==nil then mode=s.rule.periodic end
-                out[#out+1]="  "..d.id..": "..j.status.."; periodic="..tostring(mode).." interval="..(j.entry.interval or s.rule.interval).." writes="..j.writes.." checks="..j.checks..(j.reason and ("; "..j.reason) or "")
+                out[#out+1]="  "..d.id.." override: enabled; Enforcement: "..j.status.."; periodic="..tostring(mode).." interval="..(j.entry.interval or s.rule.interval).." writes="..j.writes.." checks="..j.checks..(j.reason and ("; "..j.reason) or "")
+                if d.permission=="geometry" then
+                    for _,line in ipairs(U.geometryLines(j.eligibility)) do out[#out+1]="    "..line end
+                end
                 local values={}
                 for _,field in ipairs(d.inputs) do
                     local value=j.entry.value[field[1]]
@@ -208,6 +233,7 @@ function E:diagnostics(id)
                         out[#out+1]="    preserved "..anchor.point.." -> "..relative.."."..anchor.relativePoint.." delta="..anchor.dx..","..anchor.dy
                     end
                 end
+            elseif s.rule.overrides[d.id] then out[#out+1]="  "..d.id.." override: disabled"
             end
         end
     end

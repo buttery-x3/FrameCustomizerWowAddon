@@ -146,41 +146,47 @@ test("font and statusbar pickers route their resolved media through persistence 
     LibStub=nil
 end)
 test("native fixture suite exercises real media path with optional LSM and fallback orchestration",function()
-    installMedia(); FC.Playground:startTests(); N.advance(25)
+    installMedia(); FC.Playground:startTests(); N.advance(30)
     local report=FC.Playground.lastReport; assert(not report:find("FAIL",1,true),report)
     assert(report:find("PASS SharedMedia font selection",1,true))
     assert(report:find("PASS Unavailable-library fallback",1,true))
-    assert(report:find("PASS Sibling and multiple anchor translation",1,true)); LibStub=nil
+    assert(report:find("PASS Sibling and multiple anchor translation",1,true))
+    assert(report:find("PASS Delayed/repeated geometry resets",1,true))
+    assert(report:find("PASS Missed geometry notification",1,true)); LibStub=nil
 end)
 
-test("geometry accepts non-user-placed nonmovable objects when native and ownership gates pass",function()
+test("geometry accepts non-user-placed nonmovable objects when native and representation gates pass",function()
     local f=frame("RegressionOrdinaryPanel"); assert(not f:IsMovable() and not f:IsUserPlaced())
     assert(A:canWrite(f,P.byID.position,P.byID.position.default)); assert(A:canWrite(f,P.byID.size,P.byID.size.default))
     local t=texture(f,"Decoration"); assert(A:canWrite(t,P.byID.size,P.byID.size.default))
     f.GetNumPoints=function() return 0 end; assert(A:canWrite(f,P.byID.size,P.byID.size.default))
     permission(f,P.byID.position,nil,"Unsupported layout:")
 end)
-test("geometry distinguishes native denial, secret/inaccessible checks and conservative policy",function()
+test("geometry distinguishes native denial, required checks versus optional unknown management",function()
     local f=frame("RegressionReasons")
     f.protectedAllowed=false; permission(f,P.byID.position,nil,"Native restriction:"); f.protectedAllowed=true
     f.anchorSecret=true; permission(f,P.byID.position,nil,"Inaccessible:"); f.anchorSecret=false
-    f.IsAnchoringRestricted=false; permission(f,P.byID.position,nil,"Safety policy:"); f.IsAnchoringRestricted=nil
-    local manager=EditModeManagerFrame; EditModeManagerFrame=nil; permission(f,P.byID.position,nil,"Safety policy:"); EditModeManagerFrame=manager
-    f.layoutIndex=1; permission(f,P.byID.position,nil,"Safety policy:"); f.layoutIndex=nil
-    f.secretAspects.Attributes=true; permission(f,P.byID.position,nil,"Inaccessible:"); f.secretAspects.Attributes=nil
+    f.IsAnchoringRestricted=false; permission(f,P.byID.position,nil,"Required check unavailable:"); f.IsAnchoringRestricted=nil
+    local manager=EditModeManagerFrame; EditModeManagerFrame=nil; assert(A:canWrite(f,P.byID.position,P.byID.position.default)); EditModeManagerFrame=manager
+    f.layoutIndex=1; assert(A:canWrite(f,P.byID.position,P.byID.position.default)); f.layoutIndex=nil
+    f.secretAspects.Attributes=true; assert(A:canWrite(f,P.byID.position,P.byID.position.default)); f.secretAspects.Attributes=nil
     assert(A:canWrite(f,P.byID.opacity,{alpha=0.2}))
-    f.HasAnyForbiddenAspects=function() return nil end; permission(f,P.byID.position,nil,"Safety policy:"); f.HasAnyForbiddenAspects=nil
+    f.HasAnyForbiddenAspects=function() return nil end; permission(f,P.byID.position,nil,"Required check unavailable:"); f.HasAnyForbiddenAspects=nil
 end)
-test("Edit Mode and generic panel/shared layout metadata block geometry independently of cosmetics",function()
+test("Edit Mode position is direct policy; panel and shared ancestors are advisory",function()
     local root=frame("RegressionManagers"); local t=texture(root,"Art")
+    root.OnDragStart=EditModeSystemMixin.OnDragStart
     EditModeManagerFrame.registeredSystemFrames={root}
-    permission(t,P.byID.position,nil,"Managed layout: Edit Mode"); assert(A:canWrite(t,P.byID.opacity,{alpha=0.2}))
+    permission(root,P.byID.position,nil,"Use Blizzard Edit Mode")
+    assert(A:canWrite(t,P.byID.position,P.byID.position.default)); assert(A:canWrite(t,P.byID.opacity,{alpha=0.2}))
+    assert(A:canWrite(root,P.byID.size,P.byID.size.default))
     EditModeManagerFrame.registeredSystemFrames={}; UIPanelWindows={RegressionManagers={area="left"}}
-    permission(root,P.byID.position,nil,"Managed layout: Blizzard UI panel registry")
-    UIPanelWindows=nil; root.attributes={["UIPanelLayout-defined"]=true}; permission(root,P.byID.size,nil,"Managed layout:")
+    assert(A:canWrite(root,P.byID.position,P.byID.position.default))
+    UIPanelWindows=nil; root.attributes={["UIPanelLayout-defined"]=true}; assert(A:canWrite(root,P.byID.size,P.byID.size.default))
     root.attributes=nil; root.IsLayoutFrame=function() error("Do not call arbitrary layout methods") end
-    permission(t,P.byID.position,nil,"Managed layout:"); root.IsLayoutFrame=nil
+    assert(A:canWrite(t,P.byID.position,P.byID.position.default)); root.IsLayoutFrame=nil
 end)
+
 test("sibling-relative single anchor persists identity and applies without clearing points",function()
     local root=frame("RegressionSibling"); local relative=texture(root,"Reference"); local t=texture(root,"Target")
     t:ClearAllPoints(); t:SetPoint("TOPLEFT",relative,"TOPRIGHT",12,5)

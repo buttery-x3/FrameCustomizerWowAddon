@@ -55,8 +55,12 @@ function PG:startTests()
         self.testAdapter=FC.NativeAdapter.new(); self.testAdapter.fixtures[self.testFixtures.root]=true
         -- Cache before installing hooks to exercise missed-notification recovery.
         self.savedAlpha=self.testFixtures.texture.SetAlpha
+        self.savedPoint=self.testFixtures.stretch.SetPoint
     end
     local f=self.testFixtures; f.root:Show(); f.root.Late=nil; f.root.Alias=nil
+    -- Synthetic layout hint and resets on our own region; no Blizzard registry
+    -- is modified. Geometry uses the same production management policy path.
+    f.stretch.layoutIndex=1
     f.sibling:SetPoint("TOPLEFT",f.texture,"TOPRIGHT",8,0)
     f.stretch:SetPoint("TOPLEFT",f.art,"BOTTOMLEFT",12,-6); f.stretch:SetPoint("BOTTOMRIGHT",f.art,"BOTTOMRIGHT",-12,-14)
     f.texture:SetAlpha(1); f.texture:SetTexture("Interface\\Buttons\\WHITE8X8"); f.text:SetAlpha(1); f.text:SetFont("Fonts\\FRIZQT__.TTF",14,""); f.bar:SetStatusBarColor(0.3,0.8,0.5,1); f.bar:SetValue(60)
@@ -153,6 +157,20 @@ function PG:startTests()
         end
         return true
     end)
+    local function geometryMatched()
+        local ok,why=applied("r7","position"); if not ok then return ok,why end
+        local current=FC.Anchors.read(a,f.stretch)
+        if not current then return nil,"anchor read unavailable" end
+        return FC.Util.equal(current,db.rules.r7.overrides.position.value) and e.stats.errors==0
+    end
+    step("Delayed/repeated geometry resets settle under normal enforcement with advisory",1.1,function()
+        self.run.geometryResetUntil=GetTime()+0.6
+    end,geometryMatched)
+    step("Missed geometry notification corrected by opted-in periodic enforcement",0.6,function()
+        if db.rules.r7 then db.rules.r7.overrides.position.periodic=true; db.rules.r7.overrides.position.interval=0.25; e:sync() end
+        self.savedPoint(f.stretch,"TOPLEFT",f.art,"BOTTOMLEFT",12,-6)
+        self.savedPoint(f.stretch,"BOTTOMRIGHT",f.art,"BOTTOMRIGHT",-12,-14)
+    end,geometryMatched)
     step("Pause All stops queued and periodic writes",0.6,function() db.rules.r1.periodic=true; e:sync(); f.texture:SetAlpha(0.9); e:pause(true) end,function() return alpha(f.texture,0.9) end)
     local version,build,date,interface=GetBuildInfo()
     self.run={f=f,engine=e,steps=steps,index=0,report={"FrameCustomizer "..FC.VERSION.." / "..FC.REVISION,
@@ -160,7 +178,7 @@ function PG:startTests()
         "Native addon-owned fixtures ONLY; no protected Blizzard compatibility claim.",
         a:mediaDiagnostics(),
         "Secret values, protected operations, combat and rendering: SKIPPED (manual acceptance required)."}}
-    FC.Print("Running native fixture scenarios (~24 seconds). /fcu test stop cancels. Entering combat cancels.")
+    FC.Print("Running native fixture scenarios (~27 seconds). /fcu test stop cancels. Entering combat cancels.")
 end
 function PG:tick()
     local run=self.run; if not run then return end
@@ -168,6 +186,11 @@ function PG:tick()
     local now=GetTime()
     local ok,err=pcall(function()
         if run.repeatUntil and now<run.repeatUntil and (not run.lastReset or now-run.lastReset>0.15) then run.f.texture:SetAlpha(0.8); run.lastReset=now end
+        if run.geometryResetUntil and now<run.geometryResetUntil and (not run.lastGeometryReset or now-run.lastGeometryReset>0.15) then
+            run.f.stretch:SetPoint("TOPLEFT",run.f.art,"BOTTOMLEFT",12,-6)
+            run.f.stretch:SetPoint("BOTTOMRIGHT",run.f.art,"BOTTOMRIGHT",-12,-14)
+            run.lastGeometryReset=now
+        end
         run.engine:tick()
         if not run.deadline or now>=run.deadline then
             if run.index>0 then
