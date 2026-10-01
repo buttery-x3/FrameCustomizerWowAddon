@@ -12,6 +12,7 @@ subprocess.run([sys.executable, str(ROOT / "scripts/check.py")], cwd=ROOT, check
 toc = (SOURCE / "FrameCustomizer.toc").read_text(encoding="utf-8")
 version = re.search(r"^## Version: ([\d.]+)$", toc, re.M).group(1)
 files = ["FrameCustomizer.toc", "LICENSE"] + [s.strip() for s in toc.splitlines() if s.strip() and not s.startswith("#")]
+files += re.search(r"^## X-FrameCustomizer-Assets: (.+)$", toc, re.M).group(1).split()
 assert len(files) == len(set(files))
 destination = ROOT / "dist"
 destination.mkdir(exist_ok=True)

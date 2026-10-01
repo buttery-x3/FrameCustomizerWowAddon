@@ -1,70 +1,55 @@
-# Test results — 2026-09-30
+# Test results — 2026-10-01
 
-**FrameCustomizer 0.1.0 / first-build-1** is implemented and packaged. **47 offline scenarios passed: 30 production-core scenarios and 17 adapter/bootstrap/editor contract scenarios.** The addon has **not been launched in the user's WoW client**. The native `/fcu test` report must still be run there by the user.
+**FrameCustomizer 0.2.0 / explorer-media-geometry-1** is implemented and packaged. **71 offline scenarios pass: 30 core + 17 existing native-contract + 24 new explorer/media/geometry regression scenarios.** All original scenarios remain; the old requirement that a non-user-placed frame be denied was updated to test the intended broader policy.
 
-## Executed commands and outcomes
+The user's first 0.1.0 live run confirmed loading, real-object discovery, player artwork/portrait opacity, combat survival, reload persistence, Pause All + reload recovery and Resume. That evidence is retained. **This pass has not run 0.2.0 in WoW.** It does not certify the new geometry/media behavior, security or rendering from mocks.
 
-Working directory: `D:\dev\FrameCustomizerWowAddon`. Commands used the Python 3.14 installation exposed by `py`; the default `python` command was a Windows Store alias and was not used for checks. Standalone `lua`/`luac` were not installed; Lupa's actual Lua 5.1 runtime supplied compilation/execution.
+## Executed automated commands
 
-| Exact command | Result |
+Working directory: `D:\dev\FrameCustomizerWowAddon`. The existing `.tools/venv` Python 3.14/Lupa 2.6 environment was reused. No runtime dependency was added to the addon.
+
+| Command | Final result |
 | --- | --- |
-| `py -3.14 -m venv .tools/venv` | PASS — isolated development environment created |
-| `& '.tools/venv/Scripts/python.exe' -m pip install lupa==2.6` | PASS — pinned Lupa 2.6 installed, no runtime dependency added to the addon |
-| `& '.tools/venv/Scripts/python.exe' scripts/check.py` | PASS — production Lua syntax, TOC, core and strict native-contract harness; final suite also rerun by package command below |
-| `& '.tools/venv/Scripts/python.exe' scripts/check_reference.py --zip 'D:/Games/World of Warcraft/_classic_beta_/BlizzardInterfaceCode.zip'` | PASS — 48 declaration/shared-source contracts; ZIP read-only; no exported Lua executed |
-| `& '.tools/venv/Scripts/python.exe' scripts/package.py` | PASS — final 30/30 core + 17/17 native-contract scenarios, then exact ZIP member/content validation |
-| `& './scripts/test-deploy.ps1'` | PASS — WhatIf, fresh install, refusal without Update, backup update, unrelated-addon rejection, sibling addon and WTF sentinels unchanged |
-| `Get-FileHash -LiteralPath 'D:\Games\World of Warcraft\_classic_beta_\BlizzardInterfaceCode.zip' -Algorithm SHA256` | PASS — fingerprint matches the independently read source-audit hash recorded in SOURCE_NOTES |
+| `& .tools/venv/Scripts/python.exe scripts/check.py` | PASS throughout development after fixes; the identical final check is invoked by packaging below: 30 core + 17 existing native-contract + 24 regression scenarios. Eleven production Lua modules compile in Lua 5.1; TOC references are exact; transparent TGA header, dimensions, every alpha pixel, runtime path and asset manifest validate. |
+| `& .tools/venv/Scripts/python.exe scripts/check_reference.py --zip 'D:/Games/World of Warcraft/_classic_beta_/BlizzardInterfaceCode.zip'` | PASS — 58 declaration/shared-source contracts. The original supplied ZIP was read without execution or modification; fingerprint unchanged. |
+| `& .tools/venv/Scripts/python.exe scripts/package.py` | PASS — reruns all 71 scenarios, then validates exact ZIP member names, unique addon root, integrity and every member against source. |
+| `& ./scripts/test-deploy.ps1` | PASS — WhatIf, fresh install, refusal without Update, backup update, unrelated-addon rejection, sibling addon/WTF sentinels unchanged, transparent texture hash preserved. |
 
-Final package: **`dist/FrameCustomizer-0.1.0.zip`**, **30,187 bytes**, **12 files**, exactly one top-level `FrameCustomizer/` folder.
+Final installable package: **`dist/FrameCustomizer-0.2.0.zip`**, **37,479 bytes**, **14 allowlisted files**, exactly one top-level `FrameCustomizer/` directory: TOC, eleven Lua modules, MIT licence and the addon-owned transparent TGA.
 
-SHA-256: `563d993ffb98667bf2efbe452abdcf4d93ba077b4f03abb6c13094ed41e04c56` (also in `dist/FrameCustomizer-0.1.0.zip.sha256`).
+SHA-256: `4e60df1e796273eec09251167a5270f904c34f5c59973c1d2e4cb17198e18719` (also `dist/FrameCustomizer-0.2.0.zip.sha256`).
 
-Ten addon Lua files compile with Lua 5.1 `loadstring`; every TOC source reference exists, is unique, and exactly matches the runtime Lua file set. The addon ships no XML, so there are no addon XML references to validate. The native-only `UIPanelScrollFrameTemplate` is present in the supplied source, but its rendering is untested. The ZIP contains only the TOC, ten Lua modules and the addon licence. All byte contents match the source files. No Blizzard export, docs, tests, cache, Python interpreter or third-party library is bundled.
+The deployment test used only `.tools/deployment-test-76993ee727294f9e8397248bb176d928` and its recoverable backup under ignored `dist/deploy-backups/`. **No game-installation or actual account settings were changed.** The supplied Blizzard source is not packaged. No third-party fonts, textures or libraries were bundled.
 
-The deployment test operated only inside a newly generated `.tools/deployment-test-*` tree and made a recoverable backup under ignored `dist/deploy-backups/`. **No files were deployed to the game installation, and no actual account settings were accessed or changed.**
+## New regression coverage
 
-## What was tested
+- Local parent-key labels and compact types are separate from verified resolver paths. Anonymous objects remain inspect-only; aliases still fail identity validation.
+- Search retains ancestry and depth, collapse/expand works while filtered, clearing the query restores normal expansion, scans feed the same hierarchy, and filtered leaves do not pretend to have matching children.
+- Selection reveals ancestors, scrolls into view and highlights a row. Tooltips retain stable paths. Saved entries still render/select after the navigation changes.
+- Embedded LibStub detection and all supported media categories; missing/incompatible/failing libraries; inaccessible lists/entries; skipped invalid fetches; late registrations; enumeration cap; explicit built-ins-only fallback.
+- Normal editor pickers show source/name, select resolved files, change atlas kind to file, preserve chosen friendly aliases during editing, save/reload declarative values and invoke texture, font and status-bar property setters. Bar values remain untouched.
+- Actual on-disk transparent texture validation and allowlisted packaging/deployment. No mock is used to claim the client can decode/display it.
+- Native fixture orchestration with LSM absent and a mock provider present; optional font step, built-in fallback, texture/statusbar replacement and sibling/multiple-anchor translation. Repeated runs retain bounded native fixture/hook allocations and cancellation cleans up.
+- Nonmovable/non-user-placed objects become eligible when native and manager gates permit; no setter changes those flags. Native denial, inaccessible data, missing checks, known managers and conservative decisions have distinct reasons.
+- Edit Mode registration, panel registry/attributes and shared layout ancestry block geometry but leave cosmetics independently eligible.
+- Sibling-relative identity capture and multiple-anchor translation without ClearAllPoints; schema round trips; readable verification; undo; legacy single-parent compatibility; multi-anchor size rejection.
+- Invalid/duplicate anchors, unsupported relatives, offset ranges, changed anchor count/relationships, relative type changes, relative forbidden layout and native permission changes stop writes. Periodic mode never forces a denied operation. Each primitive geometry setter rechecks permission.
+- The editor retains anchor snapshots while editing, recaptures disabled position rules and refuses a new position without readable anchors. Reports contain validated configured relationships without reading live geometry.
 
-Production core:
+The original core coverage of schema validation, secret sentinels, resolver rebinding, per-property isolation, normal/periodic enforcement, shared budgets, hook deduplication, backoff, pause/delete/undo, duplicate targets and diagnostics is preserved. The native recorder still fails unknown methods; it is not a WoW emulator.
 
-- Versioned validation/round trips; independent malformed entries/properties; unknown schema preservation; interval/number validation; inaccessible fake data excluded from saved output.
-- Delayed targets; differently named nested fixtures; verified parent keys; ambiguous aliases and changed object types failing closed; anonymous objects rejected; identity surviving appearance changes.
-- Selected-property isolation; all nine actual property definitions executing; existing status-bar fill changed without owning bar values.
-- Normal hooked correction, deduplication, ignored self-writes, missed-notification recovery and permission-independent constant writes without reading an inaccessible baseline.
-- Object and property periodic strategy overrides; interval bounds; bounded/fair scheduler progress over 100 rules; intended periodic writes not counted as failures.
-- Denied and permitted sides of guards, deferred vs permanent denials, missing getters/setters, actual error backoff/suspension and guard cleanup after errors.
-- Repeated enable/disable cycles; rebinding and fresh baseline; old callbacks becoming inactive; Pause All, entry disable, property disable and delete stopping queued/periodic/hooked work.
-- Read-free diagnostics; best-effort undo; conflict validation and duplicate enabled targets prevented from racing.
+During development the suite caught the deliberately obsolete user-placement assertion, a friendly-name ambiguity for duplicate media paths, and a verification assertion that mistakenly expected periodic mode to stop reapplying matching values. Review also found a saved-entry rendering branch that needed a guard after adding filtered-child controls; it now has a regression. These are resolved; final checks pass.
 
-Strict native adapter / UI call recorder:
+## Native acceptance still required
 
-- Full TOC loading in order, ADDON_LOADED and login initialization, slash recovery, persistent independent safe-mode flag.
-- Access/forbidden/required-check guards, secret-aspect preflight, inaccessible return discarded, inaccessible object type rejected as persistent identity, texture-specific permissions and atlas validation.
-- Operation-level protected/layout checks, geometry permitted on eligible fixtures and a recorded user-placed frame, Edit Mode geometry ownership without blocking cosmetics.
-- Actual production editor construction; browsing/refreshing without target setters; rule/value/strategy controls; lazy discovery; exact paths; built-in media; picker key flow; copyable report setup.
-- Runtime fixture scenario orchestration twice; cleanup and hook count stable on repeat; cancellation on combat entry.
+1. **Upgrade/load/UI:** fully restart with the new Lua module and TGA; confirm 0.2.0 in `/fcu report`. Verify actual editor layout, label truncation/tooltips, indentation, row selection, scrolling, query collapse/clear and Scan search on a large real hierarchy.
+2. **Media:** run the new `/fcu test` and copy its native report. In `/fcu playground`, manually replace Decoration with Transparent / blank, change Bar fill and select Label fonts. Confirm native TGA transparency, UV behavior, real asset availability, glyph/locale coverage and continued bar/control behavior. With a real LSM provider, select registered assets; separately restart without any provider and test fallback. The explicit built-ins-only test does not simulate uninstalling a provider or deleting its files.
+3. **Geometry:** inspect and translate SiblingAnchor and TwoAnchors; verify spacing, scaling, anchor details, undo and reload. Test unrelated eligible Blizzard panels and known managed panels. Confirm managed Edit Mode/Blizzard layout is left alone and cosmetics still work. Unmarked layout managers may exist; absence of recognized metadata is not proof of exclusive ownership.
+4. **Native permissions:** verify combat/context transitions, inaccessible values, forbidden layout, protected permission checks and posthook taint behavior. Denied geometry must remain blocked with no repeated setters/action-blocked errors. Fixture mocks cannot establish native security correctness.
+5. **Persistence/enforcement:** repeat ordinary Blizzard refreshes, load-on-demand rebinding, reload persistence, periodic behavior, property/entry disable, delete, Pause All + reload and Resume against this build. The successful 0.1.0 report does not substitute for checking regressions in 0.2.0.
 
-The recorder's offline PASS results for the fixture sequence validate **orchestration only**. They are not native fixture results and are not presented as evidence of native secrets, security, taint, layout or rendering. Unknown fake methods fail. The test environment contains explicit narrow contracts, not a permissive whole-client simulator.
+## Assumptions from the supplied export
 
-## Corrections made during verification/review
+See [SOURCE_NOTES.md](SOURCE_NOTES.md). The export declares movement/user-placement/resizability flags separately from protected SetPoint/SetSize permissions; removing those flags as proxies is a reasoned interpretation, not native proof. GetPoint/SetPoint support ScriptRegion relatives and multiple anchors. Updating existing named points and translating offsets is explicitly modeled offline, but native replacement semantics and UI-scale/layout effects must be verified. Manager metadata establishes known involvement; some ancestry blocks deliberately remain conservative. All hard native gates remain active. Coordinated multi-anchor writes are not an atomic native transaction.
 
-- Equality helper now short-circuits identical references/numbers before recursive comparison (initial test caught a stack overflow on cyclic fixture objects).
-- Inspector anchors align corresponding edges; initial scaling fits the available UIParent area. This is code-level layout review, not native visual QA.
-- Source-backed scale/shown secret-aspect checks and unreadable object-type identity rejection were added.
-- Discovery performs costly per-object eligibility checks in 16-reference slices after bounded native enumeration.
-- Safe pause has its own persisted flag, independent of database-schema compatibility.
-- Duplicate target entries are paused on load; explicitly reenabling conflicting duplicates cannot create competing writes.
-- Native fixture objects and installed posthooks are reused across repeated test runs; late textures are first allocated in their delayed/rebinding steps.
-
-## Not run / still required in the actual client
-
-- Native WoW addon load, template/font/asset rendering, minimum-size/UI-scale behaviour and keyboard picker interaction.
-- The actual `/fcu test` command and its user-copyable PASS/FAIL/SKIPPED report. It runs only when explicitly requested in game and modifies only its isolated addon-owned fixtures.
-- Editing unrelated Blizzard objects; ordinary refresh behaviour; late Blizzard addon loading and reload persistence against real UI objects.
-- Native secret values and inaccessible tables, taint, protected restrictions, combat transitions and native hook safety. Offline sentinels are deliberately not claimed to simulate these perfectly.
-- File/TOC recognition across client restart vs `/reload`, performance on a large live UI, and actual LibSharedMedia installed-library integration. Built-in media fallback is offline tested.
-
-Known intentionally unavailable cases: unverified anonymous/pool identities; unknown/managed/Edit Mode geometry; root/editor infrastructure; inaccessible or forbidden operations; unsupported object types; logical parent hiding; arbitrary scripts; gameplay triggers; shared Font mutation. The first build supports only a single parent-relative geometry anchor and does not normalize texture UVs. It does not promise universal hook coverage, exact baseline restoration or flicker-free rendering.
-
-Start with `/fcu`, `/fcu test`, and `/fcu report`. Use `/fcu pause` for recovery. Follow the five-step real-UI checklist in [README.md](README.md); deployment and module boundaries are in [DEVELOPMENT.md](DEVELOPMENT.md).
+Known unsupported/policy-blocked cases include secret/unreadable anchors, anonymous relative identities, more than eight anchors, changed relationships pending recapture, multi-anchor size, unready Edit Mode registry, and known/suspected managed ancestry. These are reported as their actual category, not all described as WoW API denials.

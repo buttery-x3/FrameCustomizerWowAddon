@@ -22,11 +22,11 @@ end
 local aspects={GetAlpha={"Alpha"},GetVertexColor={"VertexColor","Alpha"},GetTextColor={"VertexColor","Alpha"},
     GetStatusBarColor={"VertexColor","Alpha"},GetName={"ObjectName"},GetObjectType={"ObjectType"},
     GetParent={"Hierarchy"},GetNumChildren={"Hierarchy"},GetNumRegions={"Hierarchy"},GetChildren={"Hierarchy"},GetRegions={"Hierarchy"},
-    GetEffectiveScale={"Scale"},IsShown={"Shown"}}
+    GetEffectiveScale={"Scale"},IsShown={"Shown"},GetAttribute={"Attributes"}}
 local readable={GetAlpha=true,GetAtlas=true,GetTexture=true,GetVertexColor=true,GetTextColor=true,GetFont=true,
     GetStatusBarColor=true,GetStatusBarTexture=true,GetSize=true,GetNumPoints=true,GetPoint=true,GetParent=true,
     GetName=true,GetObjectType=true,GetParentKey=true,GetDebugName=true,GetNumChildren=true,GetNumRegions=true,
-    GetRect=true,GetEffectiveScale=true,IsShown=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
+    GetAttribute=true,GetRect=true,GetEffectiveScale=true,IsShown=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
 local geometryRead={GetSize=true,GetPoint=true,GetRect=true,GetEffectiveScale=true}
 local writable={SetAlpha=true,SetTexture=true,SetAtlas=true,SetVertexColor=true,SetFont=true,SetTextColor=true,
     SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true}
@@ -113,56 +113,102 @@ function A:barRegion(o)
     local ok,t=self:read(o,"GetStatusBarTexture")
     if ok and t and self:inspectable(t) and self:kind(t)=="Texture" then return t end
 end
-function A:geometryPermission(o,d)
-    if boolCall(o,"IsAnchoringRestricted")~=false or boolCall(o,"IsAnchoringSecret")~=false then return false,"Anchoring restricted, secret, or checks unavailable",true end
-    local parent=self:parent(o)
-    if not parent then return false,"Accessible parent required",true end
-    if not self:noForbidden(o,"UntrustedLayoutScriptExecution") or not self:noForbidden(parent,"UntrustedLayoutScriptExecution") then return false,"Forbidden layout inheritance or missing layout check",true end
-    if not C_RestrictedActions or type(C_RestrictedActions.CheckAllowProtectedFunctions)~="function" then return false,"Protected-operation permission API unavailable",false end
-    local allowed=C_RestrictedActions.CheckAllowProtectedFunctions(o,true)
-    if not safe(allowed) or allowed~=true then return false,"Protected operation denied in current context",true end
-    local one,n=self:read(o,"GetNumPoints")
-    local ok,_,relative=self:read(o,"GetPoint",1)
-    if not one or n~=1 or not ok or relative~=parent then return false,"Geometry requires one existing anchor to its parent",true end
-    if self:isFixture(o) then return true end
-    -- A positive native user-placement marker is required; mere absence of a
-    -- recognized manager is not evidence of ownership. Recheck on every write.
-    local userPlaced,u=self:read(o,"IsUserPlaced")
-    local movable,m=self:read(o,"IsMovable")
-    if not userPlaced or u~=true or not movable or m~=true then return false,"Layout ownership unknown: requires a movable, user-placed frame",false end
-    if d.setting=="size" then
-        local resizable,r=self:read(o,"IsResizable")
-        if not resizable or r~=true then return false,"Size ownership unknown: frame is not user-resizable",false end
+-- Native gates, known managers, and representation policy are separate. None
+-- of the movement/persistence flags establishes permission for SetPoint/SetSize.
+function A:geometryNative(o,relative)
+    for _,key in ipairs({"IsAnchoringRestricted","IsAnchoringSecret"}) do
+        local v=boolCall(o,key)
+        if v==nil then return false,"Safety policy: native "..key.." check unavailable",true end
+        if v then return false,(key=="IsAnchoringSecret" and "Inaccessible: secret anchoring" or "Native restriction: anchoring restricted"),true end
     end
+    local parent=self:parent(o)
+    if not parent then return false,"Inaccessible: geometry requires an accessible parent",true end
+    for _,object in ipairs({o,parent,relative or parent}) do
+        local f=method(object,"HasAnyForbiddenAspects")
+        local aspect=Enum and Enum.ForbiddenAspect and Enum.ForbiddenAspect.UntrustedLayoutScriptExecution
+        if not self:inspectable(object) or not f or not aspect then return false,"Safety policy: layout permission check unavailable",true end
+        local forbidden=f(object,aspect)
+        if not safe(forbidden) then return false,"Inaccessible: layout permission result",true end
+        if type(forbidden)~="boolean" then return false,"Safety policy: layout permission check returned no boolean",true end
+        if forbidden then return false,"Native restriction: forbidden layout inheritance",true end
+    end
+    if not C_RestrictedActions or type(C_RestrictedActions.CheckAllowProtectedFunctions)~="function" then return false,"Safety policy: protected-operation permission API unavailable",true end
+    local allowed=C_RestrictedActions.CheckAllowProtectedFunctions(o,true)
+    if not safe(allowed) then return false,"Inaccessible: protected-operation permission result",true end
+    if type(allowed)~="boolean" then return false,"Safety policy: protected permission check returned no boolean",true end
+    if allowed~=true then return false,"Native restriction: protected operation denied in current context",true end
+    return true
+end
+function A:geometryOwnership(o)
+    if self:isFixture(o) then return true end
     local manager=rawget(_G,"EditModeManagerFrame")
-    if not self:inspectable(manager) then return false,"Edit Mode registry unavailable; ownership unknown",true end
+    if not self:inspectable(manager) then return false,"Safety policy: Edit Mode registry unavailable; ownership unverified",true end
     local registry=U.field(manager,"registeredSystemFrames")
     local loaded=U.field(manager,"layoutInfo") or U.field(manager,"overrideLayoutInfo")
-    if type(registry)~="table" or type(loaded)~="table" or #registry>256 then return false,"Edit Mode registry not ready / exceeds inspection bound",true end
+    if type(registry)~="table" or type(loaded)~="table" or #registry>256 then return false,"Safety policy: Edit Mode registry not ready / exceeds inspection bound",true end
+    local panels=rawget(_G,"UIPanelWindows")
+    if not safe(panels) or panels~=nil and type(panels)~="table" then return false,"Inaccessible: UI panel registry",true end
     local chain=o
     for _=0,FC.LIMITS.depth do
         if chain==UIParent then return true end
-        if not chain or not self:inspectable(chain) then return false,"Unknown layout ancestry",true end
+        if not chain or not self:inspectable(chain) then return false,"Safety policy: unknown layout ancestry",true end
         for i=1,#registry do
             local v=registry[i]
-            if not safe(v) then return false,"Edit Mode registry inaccessible",true end
-            if v==chain then return false,"Geometry is owned by Edit Mode on this object or an ancestor",true end
+            if not safe(v) then return false,"Inaccessible: Edit Mode registry entry",true end
+            if v==chain then return false,"Managed layout: Edit Mode owns geometry on this object or an ancestor",true end
         end
-        for _,key in ipairs({"system","systemInfo","layoutIndex","IsLayoutFrame","Layout","SetFixedFrameStrata"}) do
+        local name=self:name(chain)
+        if panels and name then
+            local entry=rawget(panels,name)
+            if not safe(entry) then return false,"Inaccessible: UI panel metadata",true end
+            if entry~=nil then return false,"Managed layout: Blizzard UI panel registry owns this object or an ancestor",true end
+        end
+        if method(chain,"GetAttribute") then
+            local ok,defined=self:read(chain,"GetAttribute","UIPanelLayout-defined")
+            if not ok then return false,"Inaccessible: UI panel layout attributes",true end
+            if defined then return false,"Managed layout: Blizzard UI panel layout attributes",true end
+        end
+        for _,key in ipairs({"systemInfo","IsLayoutFrame"}) do
             local v=rawget(chain,key)
-            if not safe(v) then return false,"Layout metadata inaccessible",true end
-            if v~=nil then return false,"Managed or unverified layout ("..key.."); geometry unavailable",false end
+            if not safe(v) then return false,"Inaccessible: layout metadata",true end
+            if v~=nil and v~=false then return false,"Managed layout: "..key.." on object or ancestor",true end
+        end
+        for _,key in ipairs({"system","layoutIndex","Layout","SetFixedFrameStrata"}) do
+            local v=rawget(chain,key)
+            if not safe(v) then return false,"Inaccessible: layout metadata",true end
+            if v~=nil and v~=false then return false,"Safety policy: possible layout ownership ("..key.."); not a native API denial",true end
         end
         chain=self:parent(chain)
     end
-    return false,"Layout ancestry exceeds inspection bound",false
+    return false,"Safety policy: layout ancestry exceeds inspection bound",false
+end
+function A:geometryPermission(o,d,value)
+    local allowed,why,retry=self:geometryNative(o)
+    if not allowed then return false,why,retry end
+    allowed,why,retry=self:geometryOwnership(o)
+    if not allowed then return false,why,retry end
+    if d.setting=="size" then
+        local ok,n=self:read(o,"GetNumPoints")
+        if not ok then return false,"Inaccessible: size anchor count",true end
+        if not U.number(n,0,1) then return false,"Unsupported layout: multiple anchors may constrain size; preserved-anchor translation remains available",true end
+        return true
+    end
+    local anchors,reason=FC.Anchors.snapshot(self,o)
+    if not anchors then return false,reason,true end
+    for _,anchor in ipairs(anchors) do
+        local ok,err,again=self:geometryNative(o,anchor.relative)
+        if not ok then return false,err,again end
+    end
+    local compatible,err=FC.Anchors.compatible(self,o,value or d.default,anchors)
+    if not compatible then return false,err,true end
+    return true
 end
 function A:canWrite(o,d,value)
     local ok,why=self:inspectable(o); if not ok then return false,why,true end
     if self:excluded(o) then return false,"Editor/root infrastructure is not editable",false end
     if not FC.Properties.applicable(d,self:kind(o)) then return false,"Unsupported object type",false end
-    for _,key in ipairs(d.writes) do if not method(o,key) then return false,"Missing native method "..key,false end end
-    if d.permission=="geometry" then return self:geometryPermission(o,d) end
+    for _,key in ipairs(d.writes) do if not method(o,key) then return false,"Native capability unavailable: missing method "..key,false end end
+    if d.permission=="geometry" then return self:geometryPermission(o,d,value) end
     if d.permission=="texture" then
         if not self:noForbidden(o,"SetTexture") then return false,"Texture changes forbidden or permission check unavailable",true end
         if value.kind=="atlas" then
@@ -189,6 +235,13 @@ function A:write(o,key,...)
     if key=="SetTexture" or key=="SetAtlas" then
         if not self:noForbidden(o,"SetTexture") then error("FrameCustomizer: texture permission changed") end
     end
+    if key=="SetPoint" or key=="ClearAllPoints" or key=="SetSize" then
+        local _,relative=...
+        local allowed,why=self:geometryNative(o,key=="SetPoint" and relative or nil)
+        if not allowed then error("FrameCustomizer: "..why) end
+        local owned,reason=self:geometryOwnership(o)
+        if not owned then error("FrameCustomizer: "..reason) end
+    end
     local f=method(o,key); if not f then error("FrameCustomizer: method unavailable") end
     local success=f(o,...)
     if not safe(success) then return end
@@ -210,11 +263,13 @@ function A:onError(err)
     if type(geterrorhandler)=="function" then geterrorhandler()("FrameCustomizer: "..detail) end
 end
 function A:label(o)
-    local kind=self:kind(o) or "unavailable"
-    local t=FC.Resolver.describe(self,o)
-    if t then return U.joinTarget(t).." ["..kind.."]" end
+    local key=self:parentKey(o)
+    if key then return U.cleanLabel(key) end
+    local name=self:name(o)
+    if name then return U.cleanLabel(name) end
     local ok,name=self:read(o,"GetDebugName",true)
-    return (ok and U.cleanLabel(name) or "anonymous").." ["..kind.."; inspect only]"
+    if ok and U.string(name,512) and name~="" then return U.cleanLabel(name:match("([^.]+)$") or name):sub(1,80) end
+    return "anonymous"
 end
 function A:children(o)
     local out={}
@@ -245,21 +300,56 @@ function A:rect(o)
     end
     if good and U.number(scale,0.01,100) then return l,b,w,h,scale end
 end
-function A:media(mediaType)
+function A:media(mediaType,builtinsOnly)
     local builtins={font={{"Friz Quadrata","Fonts\\FRIZQT__.TTF"},{"Arial Narrow","Fonts\\ARIALN.TTF"}},
-        statusbar={{"Blizzard","Interface\\TargetingFrame\\UI-StatusBar"},{"Solid","Interface\\Buttons\\WHITE8X8"}},
-        background={{"Solid","Interface\\Buttons\\WHITE8X8"},{"Dialog","Interface\\DialogFrame\\UI-DialogBox-Background"}}}
-    local result=U.copy(builtins[mediaType] or {})
+        statusbar={{"Blizzard fill","Interface\\TargetingFrame\\UI-StatusBar"},{"Solid white","Interface\\Buttons\\WHITE8X8"}},
+        background={{"Solid white","Interface\\Buttons\\WHITE8X8"},{"Dialog background","Interface\\DialogFrame\\UI-DialogBox-Background"}}}
+    local types=mediaType=="texture" and {"background","statusbar"} or {mediaType}
+    local result={}; local info={available=false,count=0,skipped=0,capped=false}
+    for _,kind in ipairs(types) do
+        for _,item in ipairs(builtins[kind] or {}) do result[#result+1]={item[1],item[2],source="Blizzard",mediaType=kind} end
+    end
+    if mediaType~="font" then result[#result+1]={"Transparent / blank",FC.BLANK_TEXTURE,source="FrameCustomizer",mediaType="texture"} end
     local stub=rawget(_G,"LibStub")
-    if stub and safe(stub) then
-        local lib=stub("LibSharedMedia-3.0",true)
-        if lib and type(lib.List)=="function" and type(lib.Fetch)=="function" then
-            local list=lib:List(mediaType)
-            for i=1,math.min(#list,300) do
-                local name=list[i]; local path=lib:Fetch(mediaType,name,true)
-                if U.string(name,120) and U.string(path,240) then result[#result+1]={name,path} end
+    local lib,minor
+    if builtinsOnly then info.reason="Built-ins only (fallback test; installed library unchanged)"
+    elseif not safe(stub) or stub==nil then info.reason="LibSharedMedia unavailable: LibStub not loaded"
+    else
+        local ok
+        if type(stub)=="table" and method(stub,"GetLibrary") then ok,lib,minor=pcall(stub.GetLibrary,stub,"LibSharedMedia-3.0",true)
+        elseif type(stub)=="function" then ok,lib,minor=pcall(stub,"LibSharedMedia-3.0",true) end
+        if not ok or not safe(lib) or type(lib)~="table" or not method(lib,"List") or not method(lib,"Fetch") then
+            lib=nil; info.reason="LibSharedMedia unavailable or incompatible; built-ins and manual paths available"
+        end
+    end
+    if lib then
+        info.available=true; info.reason="LibSharedMedia detected"
+        if U.number(minor,0,1000000) then info.revision=minor end
+        for _,kind in ipairs(types) do
+            local ok,list=pcall(lib.List,lib,kind)
+            if not ok or not safe(list) or type(list)~="table" then info.reason="LibSharedMedia detected; enumeration failed for "..kind
+            else
+                if #list>1000 then info.capped=true end
+                for i=1,math.min(#list,1000) do
+                    local name=list[i]
+                    if U.string(name,240) and name~="" then
+                        local fetched,path=pcall(lib.Fetch,lib,kind,name,true)
+                        if fetched and U.string(path,240) and path~="" then
+                            result[#result+1]={name,path,source="SharedMedia",mediaType=kind}; info.count=info.count+1
+                        else info.skipped=info.skipped+1 end
+                    else info.skipped=info.skipped+1 end
+                end
             end
         end
     end
-    return result
+    info.summary=info.reason.."; "..info.count.." SharedMedia assets"..(info.skipped>0 and ("; "..info.skipped.." invalid/unavailable skipped") or "")..(info.capped and "; capped at 1000 per type" or "")
+    return result,info
+end
+function A:mediaDiagnostics()
+    local out={}
+    for _,kind in ipairs({"font","statusbar","texture"}) do
+        local _,info=self:media(kind)
+        out[#out+1]=kind..": "..info.summary..(info.revision and ("; library revision="..info.revision) or "")
+    end
+    return table.concat(out,"\n")
 end

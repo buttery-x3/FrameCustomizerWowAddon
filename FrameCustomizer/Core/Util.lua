@@ -1,6 +1,7 @@
 local _, FC = ...
-FC.VERSION = "0.1.0"
-FC.REVISION = "first-build-1"
+FC.VERSION = "0.2.0"
+FC.REVISION = "explorer-media-geometry-1"
+FC.BLANK_TEXTURE = "Interface\\AddOns\\FrameCustomizer\\Media\\Transparent.tga"
 FC.LIMITS = { rules = 128, depth = 12, minInterval = 0.25, maxInterval = 60,
     verify = 2, resolve = 3, jobs = 12, scan = 24, nodes = 6000, children = 256 }
 local U = {}

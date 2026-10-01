@@ -56,7 +56,8 @@ test("Edit Mode registry ownership only blocks geometry",function()
     assert(not A:canWrite(f,P.byID.position,P.byID.position.default)); assert(A:canWrite(f,P.byID.opacity,{alpha=0.5}))
     EditModeManagerFrame.registeredSystemFrames={}; assert(A:canWrite(f,P.byID.position,P.byID.position.default))
     f.layoutIndex=1; assert(not A:canWrite(f,P.byID.size,P.byID.size.default)); f.layoutIndex=nil
-    f.userPlaced=false; assert(not A:canWrite(f,P.byID.position,P.byID.position.default))
+    f.userPlaced=false; f.movable=false; f.resizable=false
+    assert(A:canWrite(f,P.byID.position,P.byID.position.default)); assert(A:canWrite(f,P.byID.size,P.byID.size.default))
 end)
 test("statusbar texture changes existing fill without calling bar value APIs",function()
     local b=CreateFrame("StatusBar","NativeBar",UIParent); b:SetStatusBarTexture("old"); b:SetValue(75)

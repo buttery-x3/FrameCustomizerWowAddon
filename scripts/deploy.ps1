@@ -32,6 +32,9 @@ $tocText = Get-Content -LiteralPath $tocPath -Raw
 $files = @('FrameCustomizer.toc', 'LICENSE') + @(
     (Get-Content -LiteralPath $tocPath) | Where-Object { $_.Trim() -and -not $_.StartsWith('#') } | ForEach-Object { $_.Trim() }
 )
+$assetLine = [regex]::Match($tocText, '(?m)^## X-FrameCustomizer-Assets: (.+)\r?$')
+if (-not $assetLine.Success) { throw 'Missing asset manifest.' }
+$files += @($assetLine.Groups[1].Value.Trim() -split '\s+')
 $existing = Test-Path -LiteralPath $destination
 if ($existing) {
     if (-not $Update) { throw 'FrameCustomizer already exists. Use -Update to back it up and copy this version.' }

@@ -38,7 +38,7 @@ add({id="texture", label="Texture or atlas", types={Texture=true},
     reads={"GetAtlas","GetTexture"}, writes={"SetTexture","SetAtlas"},
     signals={"SetTexture","SetAtlas","SetColorTexture"}, aspects={}, permission="texture",
     default={kind="file",asset="Interface\\Buttons\\WHITE8X8"},
-    inputs={{"kind","Kind: file / atlas"},{"asset","Path or atlas name","background"}},
+    inputs={{"kind","Kind: file / atlas"},{"asset","Path or atlas name","texture"}},
     validate=function(v) return fields(v,{"kind","asset"},{function(x) return x=="file" or x=="atlas" end,str}) end,
     read=function(a,o)
         local ok,atlas=a:read(o,"GetAtlas")
@@ -88,24 +88,16 @@ add({id="barColor",label="Status bar colour",types={StatusBar=true},reads={"GetS
     write=function(a,o,v) a:write(o,"SetStatusBarColor",v.r,v.g,v.b,v.a) end})
 add({id="size",label="Size",types=visual,reads={"GetSize"},writes={"SetSize"},
     signals={"SetSize","SetWidth","SetHeight"},aspects={},permission="geometry",setting="size",
-    help="Requires verified layout ownership and protected-operation permission. Most managed Blizzard geometry is intentionally unavailable.",
+    help="Requires native geometry permission and no identified layout manager. Multi-anchor size constraints are unsupported; movement flags are not permission checks.",
     default={width=160,height=32},inputs={{"width","Width (1..4096)"},{"height","Height (1..4096)"}},
     validate=function(v) local n=function(x) return num(x,1,4096) end; return fields(v,{"width","height"},{n,n}) end,
     read=function(a,o) local ok,w,h=a:read(o,"GetSize"); if ok then return {width=w,height=h} end end,
     write=function(a,o,v) a:write(o,"SetSize",v.width,v.height) end})
-local points={TOPLEFT=true,TOP=true,TOPRIGHT=true,LEFT=true,CENTER=true,RIGHT=true,BOTTOMLEFT=true,BOTTOM=true,BOTTOMRIGHT=true}
-add({id="position",label="Position relative to parent",types=visual,reads={"GetNumPoints","GetPoint","GetParent"},writes={"ClearAllPoints","SetPoint"},
-    signals={"ClearAllPoints","SetPoint","SetAllPoints"},aspects={},permission="geometry",setting="position",
-    help="One anchor to the existing parent. Requires known ownership, one existing parent anchor, and no Edit Mode or shared-layout ownership.",
-    default={point="CENTER",relativePoint="CENTER",x=0,y=0},inputs={{"point","Anchor point"},{"relativePoint","Parent anchor point"},{"x","X offset (-4096..4096)"},{"y","Y offset (-4096..4096)"}},
-    validate=function(v) local n=function(x) return num(x,-4096,4096) end; local p=function(x) return U.string(x,16) and points[x] end; return fields(v,{"point","relativePoint","x","y"},{p,p,n,n}) end,
-    read=function(a,o)
-        local ok,n=a:read(o,"GetNumPoints"); if not ok or n~=1 then return end
-        local good,p,rel,rp,x,y=a:read(o,"GetPoint",1); local parent=a:parent(o)
-        if good and rel==parent then return {point=p,relativePoint=rp,x=x,y=y} end
-    end,
-    write=function(a,o,v) local parent=a:parent(o); if not parent then error("Parent unavailable") end
-        a:write(o,"ClearAllPoints"); a:write(o,"SetPoint",v.point,parent,v.relativePoint,v.x,v.y) end})
+add({id="position",label="Position / preserved anchors",types=visual,reads={"GetNumPoints","GetPoint","GetParent"},writes={"ClearAllPoints","SetPoint"},
+    signals={"ClearAllPoints","SetPoint","SetAllPoints","ClearPoint","AdjustPointsOffset","SetPointsOffset","ClearPointsOffset"},aspects={},permission="geometry",setting="position",
+    help="One parent anchor, or 1..8 preserved anchors to accessible stable relatives. X/Y translates all preserved anchors; their points, relatives and spacing stay fixed. Disable and reselect Position to recapture a changed layout.",
+    default={point="CENTER",relativePoint="CENTER",x=0,y=0},inputs={{"point","Anchor point (preserved if multiple)"},{"relativePoint","Relative point"},{"x","X offset (-4096..4096)"},{"y","Y offset (-4096..4096)"}},
+    validate=FC.Anchors.validate,read=FC.Anchors.read,write=FC.Anchors.write})
 function P.applicable(d, kind) return d.types[kind] == true end
 function P.conflict(overrides)
     -- Vertex/text/bar colour alpha and SetAlpha share the Alpha aspect. Do not
