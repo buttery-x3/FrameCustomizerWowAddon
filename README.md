@@ -1,8 +1,8 @@
-# FrameCustomizer 0.2.0
+# FrameCustomizer 0.3.0
 
 A frame-agnostic authoring tool for **existing Blizzard UI objects**, targeting the supplied WoW Forever beta snapshot: **1.60.1, build 70124, interface 16001**, dated September 29, 2026. It customises existing widgets without replacing their values, scripts, events or interactions.
 
-The installable build is `dist/FrameCustomizer-0.2.0.zip`. The user reported successful 0.1.0 loading, discovery, cosmetic opacity through combat/reload, pause-and-reload recovery and resume. **The changes in 0.2.0 have been verified offline only.** See [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks and remaining client verification.
+The installable build is `dist/FrameCustomizer-0.3.0.zip`. The user reported successful 0.1.0 loading, discovery, cosmetic opacity through combat/reload, pause-and-reload recovery and resume. **The changes in 0.2.0 and 0.3.0 have been verified offline only.** See [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks and remaining client verification.
 
 ## Install and open
 
@@ -12,7 +12,7 @@ Extract the ZIP into the client's `Interface\AddOns` directory, producing:
 Interface\AddOns\FrameCustomizer\FrameCustomizer.toc
 ```
 
-There is exactly one addon folder in the ZIP. No external library is required. **Fully restart the client after installing 0.2.0**, which adds a Lua module and a texture asset. For subsequent edits to already-listed Lua files, use `/reload` and check `/fcu report`. The supplied slash implementation calls `ReloadUI()`; this does not establish TOC/file/asset cache behavior or automatic hot reload.
+There is exactly one addon folder in the ZIP. No external library is required. **Fully restart when upgrading from 0.1.0**, because 0.2.0 added a Lua module and a texture asset. For subsequent edits to already-listed Lua files, use `/reload` and check `/fcu report`. The supplied slash implementation calls `ReloadUI()`; this does not establish TOC/file/asset cache behavior or automatic hot reload.
 
 Enable FrameCustomizer in the AddOns list and enter the game:
 
@@ -26,7 +26,7 @@ Enable FrameCustomizer in the AddOns list and enter the game:
 | `/fcu playground` | Show editable addon-owned fixtures |
 | `/fcu playground reset` | Reset fixture cosmetics through ordinary setters |
 | `/fcu playground hide` | Hide the development playground |
-| `/fcu test` | Run opt-in native fixture scenarios outside combat (~24 seconds) |
+| `/fcu test` | Run opt-in native fixture scenarios outside combat (~27 seconds) |
 | `/fcu test stop` | Cancel and clean up the fixture test |
 
 This development pass packages the addon without deploying to the game folder. A parameterized Windows deployment script is available; see [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -47,14 +47,24 @@ Opacity and colour components use `0..1`. Opacity zero is visual suppression: it
 - File texture/atlas replacement and RGBA tint. Atlas replacement does not adopt atlas size; file replacement preserves existing UV coordinates, which can crop an image.
 - Font face, size, flags and colour on individual FontStrings. Shared Font objects are never mutated. Embedded text colour codes may take precedence.
 - Status-bar fill texture and colour. The existing fill region is used; bar values, ranges, scripts and events remain unchanged by these properties.
-- Size on objects with zero or one existing anchor, after native and manager checks. Multiple anchors can constrain dimensions, so size on those layouts is explicitly unsupported.
+- Size on objects with zero or one existing anchor, after native, representation and property-specific Edit Mode checks. Multiple anchors can constrain dimensions, so size on those layouts is explicitly unsupported.
 - Position using a single parent anchor or **1..8 preserved anchors**, including sibling/other stable relatives. X/Y are the primary anchor's absolute offsets in UI units; editing them translates all anchors and preserves spacing, point names and relative objects. The primary anchor is the first point alphabetically. A sole parent anchor retains the original editable point/relative-point behavior. **Anchor details** shows readable current and configured relationships.
 
-Position and size no longer require `IsUserPlaced`, `IsMovable` or `IsResizable` flags. Native permission checks run before application and each geometry setter. Ordinary objects still need an accessible, ready Edit Mode registry and ancestry without identified managers. Registered Edit Mode systems, Blizzard UI panel registry/attributes and shared layout markers block geometry on the object/ancestors. Suspected ownership and unavailable metadata are conservative safety blocks. Cosmetics remain independently eligible. There are no individual Blizzard frame exceptions or manager-reset hooks.
+Position and size do not require `IsUserPlaced`, `IsMovable` or `IsResizable` flags. Required access, protected-operation, anchoring and forbidden-layout checks run before application and each geometry setter. **A UI-panel registry/attribute, shared-layout marker or Edit Mode ancestor is advisory evidence of another writer.** When the actual native and representation requirements pass, an explicitly enabled override reaches the writer through the existing normal or optional periodic enforcement. No extra unlock is needed.
 
-Multiple-anchor layouts are never cleared. A changed anchor count, point name, relative point or relative identity blocks application rather than rebuilding an unexpected layout. To recapture after a legitimate change: disable Position, select it again, inspect Anchor details, edit X/Y and commit. Anonymous relatives without stable identity, secret/inaccessible anchors and sets beyond eight are unsupported. Primary offsets use `-4096..4096`; preserved relative deltas and resulting offsets are bounded to `-8192..8192`.
+FrameCustomizer deliberately leaves **the selected object's exposed Edit Mode position** to Edit Mode. Direct registration plus the exported movement-handler identity identifies that control. Size is assessed separately: direct registration, a supported same-object dimension handler and its active settings identify a duplicate size control. Scale or internal/child size settings alone do not block native width/height. Size writes both dimensions, so a proven width or height control excludes the combined Size override. Unknown/missing optional metadata and unclassified Edit Mode controls are reported honestly; they do not imply native denial. See [SOURCE_NOTES.md](SOURCE_NOTES.md) for supported evidence and classification limits. No individual frame-name exceptions or manager reset hooks exist.
 
-Geometry reasons distinguish **Native restriction**, **Inaccessible**, **Unsupported layout**, **Managed layout**, and **Safety policy**. A representation/safety block does not claim WoW denied the operation. A ready registry with no known manager metadata does not prove no other code will reposition an object. This broader eligibility still needs real-client testing.
+Multiple-anchor layouts are never cleared. Ordinary offset resets can be corrected without accumulating drift. A changed count, point name, relative point or unresolved relative identity prevents an unsafe write. To recapture after a legitimate relationship change: disable Position, select it again, inspect Anchor details, edit X/Y and commit. Anonymous relatives without stable identity, secret/inaccessible required anchors and sets beyond eight remain unsupported. Primary offsets use `-4096..4096`; preserved relative deltas and resulting offsets are bounded to `-8192..8192`. The complete intended anchor update is prepared before mutation; permission is rechecked for every setter. Coordinated calls are not atomic: a mid-update denial can leave a partial update until a later permitted retry or normal UI refresh.
+
+**Eligibility report** beside Commit value shows target/property, native/access preflight, representation support, product policy and management observations separately, with stable reason codes. Observations distinguish the target from an ancestor, confirmed property controls from heuristic hints, and unknown scans from known matches. An identity is printed only when verified. The persistent inspector advisory remains alongside pending/applied/matched enforcement; `/fcu report` includes the last engine findings without reading live values. Passed preflight or a successful setter does not prove lasting rendered appearance.
+
+| Logic case (native/access and representation checks pass) | 0.2.0 | 0.3.0 |
+| --- | --- | --- |
+| Ordinary UI-panel target | Broad manager block | Eligible with scoped advisory; setter executes |
+| Descendant of an Edit Mode system | Inherited manager block | Local position/size eligible with ancestor context |
+| System's own exposed Edit Mode position | Broad manager block | Explicit product policy: use Edit Mode |
+
+These are policy decisions and offline logic results, not claims of native compatibility. **Existing enabled rules that were blocked only by the old management policy may begin applying after this upgrade.** Disabled flags, per-property strategies and global pause state are preserved; there is no saved-data migration.
 
 ## Media selection
 
@@ -78,12 +88,12 @@ Pause All, disabling/deleting rules and disabling properties stop future enforce
 
 ## Limits and client acceptance
 
-No arbitrary scripts, gameplay triggers, replacement UI, logical parent hiding, shared-font mutation, anonymous/pool fingerprints, child-index identities, or Edit Mode takeover. Only verified global names and actual parent-key chains persist. Rules identify widgets/slots, not the gameplay entity displayed. Changed identities are never replaced by guessed matches.
+No arbitrary scripts, gameplay triggers, replacement UI, logical parent hiding, shared-font mutation, anonymous/pool fingerprints, child-index identities, or duplication of supported same-object Edit Mode controls. Only verified global names and actual parent-key chains persist. Rules identify widgets/slots, not the gameplay entity displayed. Changed identities are never replaced by guessed matches.
 
 Discovery is capped at 6000 objects, 16 reference inspections per slice, and 256 children/regions per ordinary object (4096 for the initial UI root). Closed branches are lazy. Inaccessible, huge or detached hierarchies may need Pick or an exact path. Search is not an exhaustive global scan. Native secrets, taint, template layout, fonts/assets, scale, combat transitions and rendering need client verification.
 
-1. Install 0.2.0 with a full restart; check `/fcu report`. Run `/fcu test` outside combat and copy PASS/FAIL/SKIPPED results. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
+1. Install 0.3.0 (full restart when upgrading from 0.1.0); check `/fcu report`. Run `/fcu test` outside combat and copy PASS/FAIL/SKIPPED results. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
 2. Browse a deep real hierarchy: check local labels/types, tooltip/copy path, highlight and scrolling. Search a name, full path and type; collapse an ancestor, scan, then clear search and verify previous expansion state returns.
 3. Open `/fcu playground`, expand **Art**, and use the editor: **Decoration** → Texture → Transparent / blank; **Bar** → Status bar texture; **Label** → Font. With a provider loaded, choose SharedMedia assets by name and inspect rendering. Check bar values/buttons. Restart with all LSM providers disabled and verify built-ins/manual entry still work. `/fcu test` also exercises an explicit built-ins-only fallback without changing installed libraries.
-4. Use **SiblingAnchor** and **TwoAnchors**: inspect Anchor details, change X/Y, verify relationships/spacing, enforcement, undo and reload persistence. Test eligible unrelated Blizzard panels. Confirm Edit Mode/shared/UI-panel geometry is blocked with a manager reason while cosmetics work. Multi-anchor size should report unsupported, not API-denied.
+4. Use **SiblingAnchor** and **TwoAnchors**: inspect Anchor details, change X/Y, verify relationships/spacing, enforcement, undo and reload persistence. Use an affected real panel: inspect Eligibility report, enable a permitted edit, then reopen/refresh it. Compare normal enforcement and optional periodic mode, then confirm pause + reload recovery. Check that the selected system's exposed Edit Mode position uses Edit Mode, while an eligible descendant can edit its local geometry. Multi-anchor size must remain unsupported even with an advisory. QuestFrame, WorldMapFrame and PlayerFrame are manual examples only; eligibility is never keyed by these names.
 5. On unrelated Blizzard decorations, test refresh, periodic enforcement, late loading, reload persistence, disable/delete, Pause All + reload and Resume. Reconfirm combat transitions: denied geometry must produce no writes/action-blocked errors, while permitted cosmetics should retain the previously observed behavior. Copy `/fcu report` for affected entries.

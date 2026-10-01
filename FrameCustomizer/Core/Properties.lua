@@ -88,12 +88,12 @@ add({id="barColor",label="Status bar colour",types={StatusBar=true},reads={"GetS
     write=function(a,o,v) a:write(o,"SetStatusBarColor",v.r,v.g,v.b,v.a) end})
 add({id="size",label="Size",types=visual,reads={"GetSize"},writes={"SetSize"},
     signals={"SetSize","SetWidth","SetHeight"},aspects={},permission="geometry",setting="size",
-    help="Requires native geometry permission and no identified layout manager. Multi-anchor size constraints are unsupported; movement flags are not permission checks.",
+    help="Requires native geometry permission and supported anchors. Layout managers are advisory; exposed Edit Mode dimensions use Edit Mode. Multi-anchor size is unsupported.",
     default={width=160,height=32},inputs={{"width","Width (1..4096)"},{"height","Height (1..4096)"}},
     validate=function(v) local n=function(x) return num(x,1,4096) end; return fields(v,{"width","height"},{n,n}) end,
     read=function(a,o) local ok,w,h=a:read(o,"GetSize"); if ok then return {width=w,height=h} end end,
-    write=function(a,o,v) a:write(o,"SetSize",v.width,v.height) end})
-add({id="position",label="Position / preserved anchors",types=visual,reads={"GetNumPoints","GetPoint","GetParent"},writes={"ClearAllPoints","SetPoint"},
+    write=function(a,o,v) if a.prepareGeometry then a:prepareGeometry(o,P.byID.size,v) end; a:write(o,"SetSize",v.width,v.height) end})
+add({id="position",label="Position / preserved anchors",types=visual,reads={"GetNumPoints","GetPoint","GetParent"},writes={"SetPoint"},
     signals={"ClearAllPoints","SetPoint","SetAllPoints","ClearPoint","AdjustPointsOffset","SetPointsOffset","ClearPointsOffset"},aspects={},permission="geometry",setting="position",
     help="One parent anchor, or 1..8 preserved anchors to accessible stable relatives. X/Y translates all preserved anchors; their points, relatives and spacing stay fixed. Disable and reselect Position to recapture a changed layout.",
     default={point="CENTER",relativePoint="CENTER",x=0,y=0},inputs={{"point","Anchor point (preserved if multiple)"},{"relativePoint","Relative point"},{"x","X offset (-4096..4096)"},{"y","Y offset (-4096..4096)"}},

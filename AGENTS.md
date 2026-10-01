@@ -4,7 +4,7 @@
 
 - Read `README.md`, `DEVELOPMENT.md`, `SOURCE_NOTES.md` and the relevant implementation before changing architecture.
 - Preserve the generic, frame-agnostic resolver/property/enforcement model. Blizzard frames are integration cases, not a reason to add named-frame exceptions or reset maps.
-- Keep native permission, secret-value and managed-layout checks intact. Offline mocks are not proof of native WoW behavior; report what still needs client testing.
+- Keep mandatory native permission/access and secret-value checks intact, with explicit representation limits. Ordinary panel/shared-layout involvement and Edit Mode ancestry are scoped advisory evidence, not geometry vetoes. Exclude only a supported same-object/property Edit Mode control by explicit product policy; assess position and size separately. Unknown optional management metadata must not become a mandatory permission failure. Never add named-frame exceptions or invoke layout/reset methods to inspect ownership. Offline mocks are not proof of native WoW behavior; report what still needs client testing.
 - Preserve saved-data compatibility and update documentation to describe the implementation actually delivered.
 
 ## Complete and publish work

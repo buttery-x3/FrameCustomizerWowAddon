@@ -30,7 +30,7 @@ function M:GetName() return self.name end
 function M:GetObjectType() return self.kind end
 function M:GetParent() return self.parent end
 function M:GetParentKey() return self.parentKey end
-function M:GetAttribute(key) return self.attributes and self.attributes[key] end
+function M:GetAttribute(key) assert(not self.secretAspects.Attributes,"Optional secret attributes must not be read"); return self.attributes and self.attributes[key] end
 function M:GetDebugName() return self.name or self.parentKey or "anonymous label" end
 function M:GetAlpha()
     assert(not self.secretAspects.Alpha,"A getter was invoked despite inaccessible aspect")
@@ -153,3 +153,6 @@ function N.advance(seconds)
     end
 end
 
+
+-- Metadata identities only; never execute exported Blizzard implementations.
+EditModeSystemMixin={OnDragStart=function() error("Do not invoke Edit Mode during inspection") end}
