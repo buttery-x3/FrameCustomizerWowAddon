@@ -15,6 +15,8 @@ function FC.ShowReport(id)
     local version,build,date,interface=GetBuildInfo()
     local report=FC.engine:diagnostics(id).."\nRuntime: "..version.." build "..build.." date "..date.." interface "..interface.."\nReference target: 1.60.1 / 70124 / 16001\n"
     report=report.."No live property values, hook arguments, gameplay information or account/character data included.\n"
+    report=report.."Media detection (library metadata only):\n"..FC.adapter:mediaDiagnostics().."\n"
+    report=report.."Geometry reasons: Native restriction / Inaccessible / Unsupported layout / Managed layout / Safety policy. Movement and user-placement flags are not SetPoint/SetSize permissions.\n"
     if FC.loadWarnings then for i=1,math.min(20,#FC.loadWarnings) do report=report.."Load: "..FC.loadWarnings[i].."\n" end end
     if FC.Editor.target then report=report.."Selected: "..FC.Util.joinTarget(FC.Editor.target).."\n" end
     FC.Editor:report(report)

@@ -32,6 +32,16 @@ local function check(parent,text,callback)
 end
 local function at(o,p,x,y) o:ClearAllPoints(); o:SetPoint("TOPLEFT",p,"TOPLEFT",x,-y) end
 local function show(o,on) if on then o:Show() else o:Hide() end end
+function UI:tooltip(owner,text)
+    if not self.tip then
+        local f=CreateFrame("Frame",nil,UIParent); FC.adapter.owned[f]=true; self.tip=f
+        f:SetFrameStrata("TOOLTIP"); f:EnableMouse(false); panel(f,0.035,0.05,0.07)
+        f.text=label(f,"",12); at(f.text,f,10,10); f.text:SetWidth(500)
+    end
+    local f=self.tip; f:ClearAllPoints(); f:SetPoint("TOPLEFT",owner,"BOTTOMLEFT",0,-2)
+    f.text:SetText(text); f:SetSize(520,150); f.text:SetHeight(130); f:Show()
+end
+function UI:hideTooltip() if self.tip then self.tip:Hide() end end
 function UI:message(text) self.messageText=text; if self.notice then self.notice:SetText(text or "") end end
 function UI:rule() return self.id and FC.db.rules[self.id] end
 function UI:changed()
@@ -49,6 +59,7 @@ function UI:select(o,id)
         if self.target then self.id=self:findRule(self.target) end
         FC.discovery:reveal(o)
     end
+    self.ensureSelection=true
     self:renderInspector(); self.dirty=true
 end
 function UI:createRule()
@@ -70,6 +81,8 @@ function UI:saveProperty(enabled)
         self:changed(); self:message("Override disabled. Existing appearance may need a normal refresh or /reload."); return
     end
     local value={}
+    if d.id=="position" and self.positionReason then self:message(self.positionReason); self.override:SetChecked(false); return end
+    if d.id=="position" and self.positionAnchors then value.anchors=U.copy(self.positionAnchors) end
     for i,field in ipairs(d.inputs) do
         local text=self.fields[i].edit:GetText()
         value[field[1]]=type(d.default[field[1]])=="number" and tonumber(text) or text
@@ -96,10 +109,14 @@ function UI:chooseProperty(d)
     local rule=self:rule(); local entry=rule and rule.overrides[d.id]
     if rule then self.object=FC.Resolver.resolve(FC.adapter,rule.target) end
     local value=entry and entry.value or U.copy(d.default)
-    if not entry and self.object and FC.adapter:canRead(self.object,d) then
-        local ok,current=pcall(d.read,FC.adapter,self.object)
-        if ok and current then local valid=d.validate(current); if valid then value=valid end end
+    self.positionReason=d.id=="position" and (not entry or not entry.enabled) and "Inaccessible: creating Position requires a readable anchor snapshot" or nil
+    if (not entry or d.id=="position" and not entry.enabled) and self.object and FC.adapter:canRead(self.object,d) then
+        local ok,current,reason=pcall(d.read,FC.adapter,self.object)
+        if ok and current then local valid=d.validate(current); if valid then value=valid; self.positionReason=nil end end
+        if d.id=="position" and not current then self.positionReason=ok and reason or "Inaccessible: could not capture anchor layout" end
     end
+    self.positionAnchors=d.id=="position" and U.copy(value.anchors) or nil
+    self.draftValue=U.copy(value)
     self.propertyTitle:SetText(d.label); self.help:SetText(d.help)
     self.override:SetChecked(entry and entry.enabled or false)
     self.mode=(not entry or entry.periodic==nil) and 1 or (entry.periodic and 3 or 2)
@@ -107,8 +124,11 @@ function UI:chooseProperty(d)
     self.propInterval:SetText(tostring(entry and entry.interval or rule and rule.interval or 2))
     for i,row in ipairs(self.fields) do
         local field=d.inputs[i]; show(row.edit,field~=nil); show(row.label,field~=nil); show(row.media,field and field[3]~=nil)
-        if field then row.label:SetText(field[2]); row.edit:SetText(tostring(value[field[1]] or "")); row.mediaType=field[3] end
+        row.mediaType=field and field[3]
+        if field then row.label:SetText(field[2]); row.edit:SetText(tostring(value[field[1]] or "")) end
     end
+    self:updateMediaLabels()
+    show(self.anchorDetails,d.id=="position")
     show(self.form,true)
     self:status()
 end
@@ -120,7 +140,7 @@ function UI:renderInspector()
         local o,why=FC.Resolver.resolve(FC.adapter,rule.target); self.object=o; self.identityReason=why
     end
     local kind=self.object and FC.adapter:kind(self.object) or (rule and rule.target.types[#rule.target.types])
-    self.selection:SetText(self.target and U.joinTarget(self.target) or self.object and FC.adapter:label(self.object) or "Select an object in the hierarchy or use Pick")
+    self.selection:SetText(self.object and FC.adapter:label(self.object).." ["..(kind or "?").."]" or self.target and U.joinTarget(self.target) or "Select an object in the hierarchy or use Pick")
     self.identity:SetText(self.identityReason or (rule and "Saved entry "..self.id.."  |  "..(kind or "unknown") or self.target and "Inspection only. Create an entry to enable overrides." or "Browse without modifying UI objects. Pick selects a frame; expand it to reach its regions."))
     show(self.create,self.target and not rule and not FC.readOnlyData)
     show(self.enabled,rule~=nil); show(self.remove,rule~=nil); show(self.apply,rule~=nil); show(self.undo,rule~=nil)
@@ -155,7 +175,8 @@ function UI:status()
     if rule then self.object=FC.Resolver.resolve(FC.adapter,rule.target) end
     local lines={}
     if self.object then
-        local allowed,why=FC.adapter:canWrite(self.object,d,entry and entry.value or d.default)
+        local allowed,why=FC.adapter:canWrite(self.object,d,entry and entry.enabled and entry.value or self.draftValue or d.default)
+        if d.id=="position" and self.positionReason and (allowed or why and why:find("Unsupported layout:",1,true)) then allowed=false; why=self.positionReason end
         lines[#lines+1]=allowed and "Operation available (rechecked at application)." or "Unavailable: "..(why or "unknown permission")
         if FC.adapter:canRead(self.object,d) then
             local ok,value=pcall(d.read,FC.adapter,self.object)
@@ -163,8 +184,9 @@ function UI:status()
             if current then
                 local s={}; for _,f in ipairs(d.inputs) do s[#s+1]=f[1].."="..tostring(current[f[1]]):gsub("|","||") end
                 lines[#lines+1]="Accessible current value: "..table.concat(s,"  ")
+                if current.anchors then lines[#lines+1]=#current.anchors.." anchors preserved. Edit X/Y to translate; points and relatives stay fixed." end
             else lines[#lines+1]="Current value unavailable / outside the supported format." end
-        else lines[#lines+1]="Current value inaccessible; a permitted constant write does not require a baseline." end
+        else lines[#lines+1]=d.id=="position" and "Current anchors inaccessible; position needs a readable layout." or "Current value inaccessible; a permitted constant write does not require a baseline." end
     else lines[#lines+1]="Target unresolved / not currently accessible." end
     local state=self.id and FC.engine.states[self.id]; local job=state and state.jobs[d.id]
     if job then lines[#lines+1]="State: "..job.status; if job.reason then lines[#lines+1]=job.reason end
@@ -189,19 +211,35 @@ end
 function UI:renderRows()
     local rows=self:rows(); local count=math.min(36,math.floor((self.frame:GetHeight()-245)/20))
     self.offset=U.clamp(self.offset or 0,0,math.max(0,#rows-count))
+    if self.ensureSelection then
+        for index,node in ipairs(rows) do
+            if node.object and node.object==self.object or node.id and node.id==self.id then
+                if index<=self.offset then self.offset=index-1 elseif index>self.offset+count then self.offset=index-count end
+                break
+            end
+        end
+        self.ensureSelection=nil
+    end
     for i,b in ipairs(self.rowsPool) do
         local node=rows[self.offset+i]; show(b,i<=count and node~=nil)
         if i<=count and node then
             b.node=node
-            local indent=(self.saved or self.search:GetText()~="") and 0 or math.min(node.depth,8)*10
+            local indent=self.saved and 0 or math.min(node.depth,12)*9
+            b.text:ClearAllPoints()
             b.text:SetPoint("LEFT",b,"LEFT",27+indent,0)
-            b.text:SetWidth(285-indent)
+            b.text:SetWidth((self.saved and 295 or 222)-indent)
             b.text:SetText(node.label)
-            b.arrow.text:SetText(node.id and "" or node.expanded and "-" or "+")
-            show(b.arrow,not node.id)
+            b.kind:SetText(node.id and "" or (node.path and "" or "? ")..(node.kind or "?"))
+            b.text:SetTextColor((node.id or node.path) and 0.87 or 0.62,0.9,0.94)
+            local selected=node.id and node.id==self.id or node.object and node.object==self.object
+            show(b.selected,selected)
+            b.arrow:ClearAllPoints(); b.arrow:SetPoint("LEFT",b,"LEFT",indent,0)
+            b.arrow.text:SetText(FC.discovery:isExpanded(node) and "-" or "+")
+            local hasChildren=not node.id and (FC.discovery.query~="" and node.filterHasChildren or FC.discovery.query=="" and #node.children>0)
+            show(b.arrow,not node.id and (not node.loaded or node.loading or hasChildren))
         end
     end
-    self.count:SetText(#rows.." shown / "..#FC.discovery.nodes.." discovered. Mouse wheel scrolls.")
+    self.count:SetText((#rows==0 and "0" or (self.offset+1).."-"..math.min(#rows,self.offset+count)).." / "..#rows.." rows; "..#FC.discovery.nodes.." discovered. Wheel scrolls.")
     self.dirty=false; FC.discovery.changed=false
 end
 function UI:selectPath(path)
@@ -209,34 +247,85 @@ function UI:selectPath(path)
     if #parts<1 or #parts>13 then self:message("Invalid target path."); return end
     local o,why=FC.adapter:global(parts[1])
     for i=2,#parts do if not o then break end; o,why=FC.adapter:keyChild(o,parts[i]) end
-    if o then self:select(o); self:message("Selected verified path.") else self:message(why or "Path unavailable.") end
+    if o then self.saved=false; self.search:SetText(""); self:select(o); self:message("Selected verified path.") else self:message(why or "Path unavailable.") end
+end
+function UI:updateMediaLabels()
+    if not self.property then return end
+    local summary=""
+    for i,row in ipairs(self.fields) do
+        if row.mediaType then
+            local list,info=FC.adapter:media(row.mediaType)
+            local name="Manual value"
+            if self.property.id=="texture" and self.fields[1].edit:GetText()=="atlas" then name="Manual atlas"
+            else
+                for _,item in ipairs(list) do
+                    if item[2]==row.edit:GetText() then name=item.source..": "..U.cleanLabel(item[1]); break end
+                end
+                if row.mediaChoice and row.mediaChoice[2]==row.edit:GetText() then
+                    name=row.mediaChoice.source..": "..U.cleanLabel(row.mediaChoice[1])
+                end
+            end
+            row.label:SetText(name)
+            summary=info.available and ("SharedMedia detected - Browse media to choose assets") or "SharedMedia unavailable - built-ins / manual values available"
+        end
+    end
+    if self.mediaSummary then self.mediaSummary:SetText(summary) end
 end
 function UI:media(row)
-    local list=FC.adapter:media(row.mediaType)
-    self:showList("Choose "..row.mediaType.." (built-ins + optional LibSharedMedia)",list,function(item)
-        row.edit:SetText(item[2]); self:message("Asset selected. Commit value to save the override.")
-    end)
+    local list,info=FC.adapter:media(row.mediaType)
+    self:showList("Choose "..row.mediaType,list,function(item)
+        row.mediaChoice=item
+        row.edit:SetText(item[2])
+        if self.property.id=="texture" then self.fields[1].edit:SetText("file") end
+        self:updateMediaLabels()
+        self:message(item.source..": "..U.cleanLabel(item[1]).." selected. Commit value to save the resolved file path.")
+    end,info.summary,function() return FC.adapter:media(row.mediaType) end)
 end
-function UI:showList(title,items,onSelect)
+function UI:showList(title,items,onSelect,summary,refresh)
     if not self.listFrame then
         local f=CreateFrame("Frame",nil,UIParent); FC.adapter.owned[f]=true; self.listFrame=f
-        f:SetSize(560,480); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG"); f:EnableMouse(true); panel(f,0.08,0.11,0.15)
-        f.title=label(f,"",14); at(f.title,f,16,14)
-        local close=button(f,"Close",65,function() f:Hide() end); at(close,f,480,8)
-        f.search=input(f,515); at(f.search,f,18,48)
+        f:SetSize(650,555); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG"); f:EnableMouse(true); panel(f,0.08,0.11,0.15)
+        f.title=label(f,"",14); at(f.title,f,16,14); f.title:SetWidth(490)
+        local close=button(f,"Close",65,function() f:Hide() end); at(close,f,568,8)
+        f.summary=label(f,"",11); at(f.summary,f,18,44); f.summary:SetSize(610,38)
+        f.search=input(f,345); at(f.search,f,18,87)
+        f.source=button(f,"All sources",140,function()
+            f.sourceIndex=f.sourceIndex%3+1
+            f.source.text:SetText(({"All sources","SharedMedia only","Built-ins only"})[f.sourceIndex]); f.offset=0; self:renderList()
+        end); at(f.source,f,373,87)
+        local reload=button(f,"Refresh",105,function()
+            if f.refresh then local new,info=f.refresh(); f.items=new; f.summary:SetText(info.summary); self:renderList() end
+        end); at(reload,f,523,87)
         f.rows={}
-        for i=1,15 do local b=button(f,"",515,function(s) if s.item then f.onSelect(s.item); f:Hide() end end); at(b,f,18,84+(i-1)*25); b.text:SetJustifyH("LEFT"); f.rows[i]=b end
+        for i=1,13 do
+            local b=button(f,"",610,function(s) if s.item then f.onSelect(s.item); f:Hide() end end)
+            at(b,f,18,126+(i-1)*28); b.text:SetJustifyH("LEFT"); b.text:ClearAllPoints(); b.text:SetPoint("LEFT",8,0); b.text:SetSize(375,16); b.text:SetWordWrap(false)
+            b.source=label(b,"",10); b.source:SetPoint("RIGHT",-8,0); b.source:SetWidth(215); b.source:SetJustifyH("RIGHT")
+            b:SetScript("OnEnter",function() if b.item then self:tooltip(b,U.cleanLabel(b.item[1]).."\n"..b.item.source.." / "..b.item.mediaType.."\n"..b.item[2]:gsub("|","||")) end end)
+            b:SetScript("OnLeave",function() self:hideTooltip() end); f.rows[i]=b
+        end
+        f.count=label(f,"",11); at(f.count,f,18,498)
+        local tip=label(f,"Search names, sources or paths. Hover for full path. Manual path / atlas entry stays in the editor.",11); at(tip,f,18,520); tip:SetWidth(610)
         f:EnableMouseWheel(true); f:SetScript("OnMouseWheel",function(_,delta) f.offset=math.max(0,f.offset-delta*3); self:renderList() end)
         f.search:SetScript("OnTextChanged",function() f.offset=0; self:renderList() end)
+        f:SetScript("OnHide",function() self:hideTooltip() end)
     end
-    local f=self.listFrame; f.items=items; f.onSelect=onSelect; f.offset=0; f.title:SetText(title); f.search:SetText(""); f:Show(); self:renderList()
+    local f=self.listFrame; f.items=items; f.onSelect=onSelect; f.refresh=refresh; f.offset=0; f.sourceIndex=1
+    f.source.text:SetText("All sources"); f.title:SetText(title); f.summary:SetText(summary or ""); f.search:SetText(""); f:Show(); self:renderList()
 end
 function UI:renderList()
     local f=self.listFrame; if not f.items then return end
     local filtered={}; local q=f.search:GetText():lower()
-    for _,item in ipairs(f.items) do if item[1]:lower():find(q,1,true) then filtered[#filtered+1]=item end end
-    f.offset=math.min(f.offset,math.max(0,#filtered-15))
-    for i,b in ipairs(f.rows) do b.item=filtered[f.offset+i]; show(b,b.item~=nil); if b.item then b.text:SetText(U.cleanLabel(b.item[1])) end end
+    for _,item in ipairs(f.items) do
+        local sourceOK=f.sourceIndex==1 or f.sourceIndex==2 and item.source=="SharedMedia" or f.sourceIndex==3 and item.source~="SharedMedia"
+        if sourceOK and (item[1].." "..item[2].." "..item.source.." "..item.mediaType):lower():find(q,1,true) then filtered[#filtered+1]=item end
+    end
+    f.offset=math.min(f.offset,math.max(0,#filtered-13))
+    for i,b in ipairs(f.rows) do
+        b.item=filtered[f.offset+i]; show(b,b.item~=nil)
+        if b.item then b.text:SetText(U.cleanLabel(b.item[1])); b.source:SetText(b.item.source.." / "..b.item.mediaType) end
+    end
+    f.count:SetText(#filtered==0 and "No matching assets. Try All sources, Refresh, or a manual value." or (f.offset+1).."-"..math.min(f.offset+13,#filtered).." of "..#filtered.." assets. Mouse wheel scrolls.")
 end
 function UI:highlight(o)
     if not self.outline then
@@ -266,7 +355,7 @@ function UI:startPick()
         f:SetScript("OnKeyDown",function(_,key)
             if key=="ESCAPE" or key=="ENTER" then
                 self.picking=false; f:Hide(); self.frame:Show()
-                if key=="ENTER" and self.pickCandidate then self:select(self.pickCandidate) end
+                if key=="ENTER" and self.pickCandidate then self.saved=false; self.search:SetText(""); self:select(self.pickCandidate) end
             end
         end)
     end
@@ -287,6 +376,7 @@ function UI:tick()
         self:highlight(self.pickCandidate)
     elseif self.frame and self.frame:IsShown() then
         FC.discovery:tick()
+        if FC.discovery.notice and FC.discovery.notice~=self.scanNotice then self.scanNotice=FC.discovery.notice; self:message(self.scanNotice) end
         if self.dirty or FC.discovery.changed then self:renderRows() end
         if not self.lastStatus or GetTime()-self.lastStatus>=0.5 then self.lastStatus=GetTime(); self:status() end
         self:highlight(self.object)
@@ -316,13 +406,16 @@ function UI:build()
     local drag=CreateFrame("Frame",nil,f); drag:SetPoint("TOPLEFT"); drag:SetPoint("TOPRIGHT",-70,0); drag:SetHeight(45); drag:EnableMouse(true); drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart",function() f:StartMoving() end); drag:SetScript("OnDragStop",function() f:StopMovingOrSizing() end)
     local close=button(f,"Close",62,function() f:Hide() end); close:SetPoint("TOPRIGHT",-12,-10)
-    local refresh=button(f,"Refresh",90,function() FC.discovery:refresh(); self.dirty=true end); at(refresh,f,16,54)
+    local refresh=button(f,"Refresh",90,function() FC.discovery:refresh(); self.search:SetText(""); self.offset=0; self.dirty=true end); at(refresh,f,16,54)
     local pick=button(f,"Pick",70,function() if not InCombatLockdown() then self:startPick() else self:message("Start the keyboard picker outside combat.") end end); at(pick,f,114,54)
-    local hierarchy=button(f,"Hierarchy",88,function() self.saved=false; self.offset=0; self.dirty=true end); at(hierarchy,f,192,54)
+    local hierarchy=button(f,"Hierarchy",88,function()
+        self.saved=false; self.offset=0; self.dirty=true; self.ensureSelection=true
+        if self.object then FC.discovery:reveal(self.object) end
+    end); at(hierarchy,f,192,54)
     local saved=button(f,"Saved entries",110,function() self.saved=true; self.offset=0; self.dirty=true end); at(saved,f,288,54)
     self.pause=button(f,"Pause All",110,function() FC.SetPaused(not FC.db.paused); self:status(); self:message("Pause changes enforcement only. Existing visuals may require refresh /reload.") end); at(self.pause,f,406,54)
     local report=button(f,"Report",85,function() FC.ShowReport(self.id) end); at(report,f,524,54)
-    self.search=input(f,235); at(self.search,f,16,99); self.search:SetScript("OnTextChanged",function() self.offset=0; self.dirty=true end)
+    self.search=input(f,235); at(self.search,f,16,99); self.search:SetScript("OnTextChanged",function() self.offset=0; FC.discovery:rows(self.search:GetText()); self.dirty=true end)
     self.search:SetScript("OnEditFocusGained",function() self:message("Search filters discovered labels, paths and types. Scan search explores more accessible branches.") end)
     local scan=button(f,"Scan search",94,function() FC.discovery:scan(); self:message("Scanning bounded accessible branches. Search results may be incomplete; exact paths and the picker also work.") end); at(scan,f,257,99)
     self.rowsPool={}
@@ -332,14 +425,27 @@ function UI:build()
         local b=button(list,"",335,function(s)
             if s.node.id then self:select(nil,s.node.id) else self:select(s.node.object); self:message(s.node.reason or "Inspection does not modify the selected object.") end
         end)
-        b:SetHeight(19); at(b,list,0,(i-1)*20); b.text:SetJustifyH("LEFT"); b.text:ClearAllPoints(); b.text:SetPoint("LEFT",28,0)
+        b:SetHeight(19); at(b,list,0,(i-1)*20); b.text:SetHeight(16); b.text:SetWordWrap(false); b.text:SetJustifyH("LEFT"); b.text:ClearAllPoints(); b.text:SetPoint("LEFT",28,0)
         b.arrow=button(b,"+",22,function() if b.node then FC.discovery:expand(b.node) end end); b.arrow:SetHeight(18); b.arrow:SetPoint("LEFT")
+        b.selected=panel(b,0.13,0.38,0.42,0.7); b.selected:Hide()
+        b.kind=label(b,"",10); b.kind:SetPoint("RIGHT",-4,0); b.kind:SetWidth(78); b.kind:SetJustifyH("RIGHT")
+        b:SetScript("OnEnter",function()
+            local node=b.node; if not node then return end
+            local saved=node.id and FC.db.rules[node.id]
+            local path=saved and FC.Util.joinTarget(saved.target) or node.path
+            self:tooltip(b,node.label.." ["..(node.kind or "saved entry").."]\n"..(path or "Inspect only: "..(node.identityReason or "no stable identity"))..(node.reason and ("\n"..node.reason) or ""))
+        end)
+        b:SetScript("OnLeave",function() self:hideTooltip() end)
         self.rowsPool[i]=b
     end
     self.count=label(f,"",10); self.count:SetPoint("BOTTOMLEFT",16,95)
     self.path=input(f,250); self.path:SetPoint("BOTTOMLEFT",16,57)
     local find=button(f,"Find path",79,function() self:selectPath(self.path:GetText()) end); find:SetPoint("LEFT",self.path,"RIGHT",6,0)
-    self.selection=label(f,"",16); at(self.selection,f,365,100); self.selection:SetPoint("TOPRIGHT",f,"TOPRIGHT",-18,-100); self.selection:SetHeight(24)
+    self.selection=label(f,"",16); at(self.selection,f,365,100); self.selection:SetPoint("TOPRIGHT",f,"TOPRIGHT",-125,-100); self.selection:SetHeight(24)
+    local copyPath=button(f,"Copy path",95,function()
+        if self.target then self:report(U.joinTarget(self.target),"Stable resolver path - Ctrl+A / Ctrl+C")
+        else self:message(self.identityReason or "No stable resolver path for this inspect-only object.") end
+    end); copyPath:SetPoint("TOPRIGHT",f,"TOPRIGHT",-18,-97)
     self.identity=label(f,"",12); at(self.identity,f,365,132); self.identity:SetPoint("TOPRIGHT",f,"TOPRIGHT",-18,-132); self.identity:SetHeight(48)
     self.create=button(f,"Create customisation",175,function() self:createRule() end); at(self.create,f,365,185)
     self.enabled=check(f,"Entry enabled",function(on) local r=self:rule(); if r and not FC.readOnlyData then r.enabled=on; self:changed() end end); at(self.enabled,f,365,188)
@@ -358,20 +464,31 @@ function UI:build()
     for i=1,4 do
         local row={label=label(self.form,"",11),edit=input(self.form,260)}
         at(row.label,self.form,0,59+(i-1)*42); at(row.edit,self.form,0,75+(i-1)*42)
-        row.media=button(self.form,"Assets",64,function() self:media(row) end); at(row.media,self.form,268,75+(i-1)*42)
+        row.media=button(self.form,"Browse media",105,function() self:media(row) end); at(row.media,self.form,268,75+(i-1)*42)
+        row.label:SetWidth(385); row.label:SetHeight(15)
+        row.edit:SetScript("OnTextChanged",function(_,userInput) if userInput then self:updateMediaLabels() end end)
         self.fields[i]=row
     end
+    self.mediaSummary=label(self.form,"",10); at(self.mediaSummary,self.form,0,224); self.mediaSummary:SetSize(390,16)
     self.modeButton=button(self.form,"Inherit entry",125,function() self.mode=self.mode%3+1; self.modeButton.text:SetText(({"Inherit entry","Normal only","Periodic"})[self.mode]); self:message("Commit value to save this property's strategy override.") end); at(self.modeButton,self.form,0,242)
     self.propInterval=input(self.form,55); at(self.propInterval,self.form,134,242)
     local seconds=label(self.form,"seconds",11); at(seconds,self.form,197,249)
     self.commit=button(self.form,"Commit value",120,function() self:saveProperty(true) end); at(self.commit,self.form,0,276)
+    self.anchorDetails=button(self.form,"Anchor details",120,function()
+        local value,why
+        if self.object and FC.adapter:canRead(self.object,P.byID.position) then value,why=FC.Anchors.read(FC.adapter,self.object) end
+        local text="Current readable anchors:\n"..(value and FC.Anchors.details(value) or why or "Inaccessible / unavailable")
+        local entry=self:rule() and self:rule().overrides.position
+        if entry then text=text.."\n\nConfigured anchors (enabled="..tostring(entry.enabled).."):\n"..FC.Anchors.details(entry.value) end
+        self:report(text,"Position anchor details")
+    end); at(self.anchorDetails,self.form,130,276)
     self.help=label(f,"",11); at(self.help,f,365,576); self.help:SetWidth(220); self.help:SetHeight(90)
     self.readout=label(self.form,"",11); at(self.readout,self.form,0,310); self.readout:SetPoint("TOPRIGHT",self.form,"TOPRIGHT",0,-310); self.readout:SetHeight(130)
     self.notice=label(f,"",11); self.notice:SetPoint("BOTTOMLEFT",365,62); self.notice:SetPoint("BOTTOMRIGHT",f,"BOTTOMRIGHT",-25,62); self.notice:SetHeight(42)
     self.globalStatus=label(f,"",11); self.globalStatus:SetPoint("BOTTOMLEFT",16,22); self.globalStatus:SetPoint("BOTTOMRIGHT",f,"BOTTOMRIGHT",-30,22); self.globalStatus:SetHeight(22)
     local resize=button(f,"/",22); resize:SetPoint("BOTTOMRIGHT",-3,3); resize:SetScript("OnMouseDown",function() f:StartSizing("BOTTOMRIGHT") end); resize:SetScript("OnMouseUp",function() f:StopMovingOrSizing(); self.dirty=true end)
     f:SetScript("OnSizeChanged",function() self.dirty=true end)
-    f:SetScript("OnHide",function() if not self.picking and self.outline then self.outline:Hide() end end)
+    f:SetScript("OnHide",function() if not self.picking and self.outline then self.outline:Hide() end; self:hideTooltip() end)
     FC.discovery:refresh(); self:renderInspector(); self:renderRows()
 end
 function UI:toggle()

@@ -202,6 +202,12 @@ function E:diagnostics(id)
                     values[#values+1]=field[1].."="..tostring(value):gsub("|","||"):sub(1,160)
                 end
                 out[#out+1]="    configured "..table.concat(values," ")
+                if j.entry.value.anchors then
+                    for _,anchor in ipairs(j.entry.value.anchors) do
+                        local relative=type(anchor.relative)=="table" and U.joinTarget(anchor.relative) or anchor.relative
+                        out[#out+1]="    preserved "..anchor.point.." -> "..relative.."."..anchor.relativePoint.." delta="..anchor.dx..","..anchor.dy
+                    end
+                end
             end
         end
     end

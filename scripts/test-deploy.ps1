@@ -16,6 +16,9 @@ $refused = $false
 try { & (Join-Path $PSScriptRoot 'deploy.ps1') -AddOnsPath $addons } catch { $refused = $true }
 if (-not $refused) { throw 'Existing addon overwritten without explicit Update.' }
 & (Join-Path $PSScriptRoot 'deploy.ps1') -AddOnsPath $addons -Update
+$blankSource = Join-Path $workspaceRoot 'FrameCustomizer\Media\Transparent.tga'
+$blankTarget = Join-Path $addons 'FrameCustomizer\Media\Transparent.tga'
+if ((Get-FileHash -LiteralPath $blankSource).Hash -ne (Get-FileHash -LiteralPath $blankTarget).Hash) { throw 'Transparent texture missing or changed during deployment.' }
 if ((Get-FileHash -LiteralPath (Join-Path $other 'sentinel.txt')).Hash -ne $beforeAddon) { throw 'Other addon modified.' }
 if ((Get-FileHash -LiteralPath (Join-Path $settings 'sentinel.txt')).Hash -ne $beforeSettings) { throw 'Settings modified.' }
 $targetToc = Join-Path $addons 'FrameCustomizer\FrameCustomizer.toc'

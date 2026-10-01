@@ -7,7 +7,8 @@ local allowedWrites={SetAlpha=true,SetTexture=true,SetAtlas=true,SetVertexColor=
     SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true}
 local signals={SetAlpha=true,SetTexture=true,SetAtlas=true,SetColorTexture=true,SetVertexColor=true,
     SetTextColor=true,SetFont=true,SetFontObject=true,CopyFontObject=true,SetStatusBarColor=true,SetStatusBarTexture=true,
-    SetStatusBarAtlas=true,SetSize=true,SetWidth=true,SetHeight=true,ClearAllPoints=true,SetPoint=true,SetAllPoints=true}
+    SetStatusBarAtlas=true,SetSize=true,SetWidth=true,SetHeight=true,ClearAllPoints=true,SetPoint=true,SetAllPoints=true,
+    ClearPoint=true,AdjustPointsOffset=true,SetPointsOffset=true,ClearPointsOffset=true}
 function F.new() return setmetatable({globals={},time=0,hookCount=0,errorCount=0,writeLog={},readCount=0},F) end
 function F:object(name,kind,parent,key)
     local o={name=name,kind=kind or "Texture",parent=parent,key=key,children={},hooks={},missing={},values={

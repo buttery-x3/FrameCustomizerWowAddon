@@ -1,11 +1,13 @@
 local _, FC = ...
 local D={}; D.__index=D
 FC.Discovery=D
-function D.new(a) return setmetatable({a=a,nodes={},map={},queue={},head=1,changed=true},D) end
+function D.new(a) return setmetatable({a=a,nodes={},map={},queue={},head=1,changed=true,query="",filterExpanded={}},D) end
 function D:add(o,parent)
     if self.map[o] then return self.map[o] end
     if #self.nodes>=FC.LIMITS.nodes then self.notice="Discovery cap reached (6000). Use picker / exact path or Refresh."; return end
-    local node={object=o,parent=parent,children={},label=self.a:label(o),kind=self.a:kind(o),depth=parent and parent.depth+1 or 0}
+    local target,reason=FC.Resolver.describe(self.a,o)
+    local node={object=o,parent=parent,children={},label=self.a:label(o),kind=self.a:kind(o),
+        path=target and FC.Util.joinTarget(target),identityReason=reason,depth=parent and parent.depth+1 or 0}
     self.nodes[#self.nodes+1]=node; self.map[o]=node
     if parent then parent.children[#parent.children+1]=node end
     self.changed=true
@@ -13,13 +15,22 @@ function D:add(o,parent)
 end
 function D:refresh()
     self.nodes={}; self.map={}; self.queue={}; self.head=1; self.scanIndex=nil; self.notice=nil; self.pending=nil
+    self.query=""; self.filterExpanded={}
     local root=self:add(UIParent)
     if root then self:expand(root) end
     self.changed=true
 end
+function D:isExpanded(node)
+    if self.query~="" then
+        if self.filterExpanded[node]~=nil then return self.filterExpanded[node] end
+        return node.filterHasChildren==true
+    end
+    return node.expanded==true
+end
 function D:expand(node)
-    node.expanded=not node.expanded
-    if node.expanded and not node.loaded and not node.queued then
+    local expanded=not self:isExpanded(node)
+    if self.query~="" then self.filterExpanded[node]=expanded else node.expanded=expanded end
+    if expanded and not node.loaded and not node.queued then
         node.queued=true; self.queue[#self.queue+1]=node
     end
     self.changed=true
@@ -40,7 +51,7 @@ function D:tick()
         end
         if node and not node.loaded then
             local children,reason=self.a:children(node.object)
-            node.reason=reason; node.loaded=true; node.queued=nil
+            node.reason=reason; node.loaded=true; node.loading=true; node.queued=nil
             self.pending={node=node,children=children,index=1}
         end
     end
@@ -48,7 +59,7 @@ function D:tick()
     if p then
         for _=1,16 do
             local child=p.children[p.index]; p.index=p.index+1
-            if not child then self.pending=nil; break end
+            if not child then p.node.loading=nil; self.pending=nil; break end
             if self.a:inspectable(child) and not self.a:excluded(child) and self.a:parent(child)==p.node.object then self:add(child,p.node) end
         end
         self.changed=true
@@ -68,24 +79,42 @@ function D:reveal(o)
     for _,object in ipairs(chain) do
         local node=self.map[object] or self:add(object,parent)
         if not node then break end
-        if parent then parent.expanded=true end
+        if parent then
+            if self.query~="" then self.filterExpanded[parent]=true else parent.expanded=true end
+        end
         parent=node
+    end
+    -- A previously discovered node still needs all its ancestors opened.
+    local ancestor=parent and parent.parent
+    while ancestor do
+        if self.query~="" then self.filterExpanded[ancestor]=true else ancestor.expanded=true end
+        ancestor=ancestor.parent
     end
     self.changed=true
     return self.map[o]
 end
 function D:rows(query)
     local out={}; query=(query or ""):lower()
+    if query~=self.query then self.filterExpanded={}; self.query=query end
+    local included={}
     if query~="" then
-        for _,node in ipairs(self.nodes) do if node.label:lower():find(query,1,true) then out[#out+1]=node end end
-    else
-        local seen={}
-        local function visit(node)
-            if seen[node] then return end
-            seen[node]=true; out[#out+1]=node
-            if node.expanded then for _,child in ipairs(node.children) do visit(child) end end
+        for _,node in ipairs(self.nodes) do
+            node.filterHasChildren=false
+            local text=node.label.." "..(node.path or "").." "..(node.kind or "")
+            node.match=text:lower():find(query,1,true)~=nil
+            if node.match then
+                local ancestor=node
+                while ancestor and not included[ancestor] do included[ancestor]=true; ancestor=ancestor.parent end
+            end
         end
-        for _,node in ipairs(self.nodes) do if not node.parent then visit(node) end end
+        for node in pairs(included) do if node.parent then node.parent.filterHasChildren=true end end
     end
+    local seen={}
+    local function visit(node)
+        if seen[node] or query~="" and not included[node] then return end
+        seen[node]=true; out[#out+1]=node
+        if self:isExpanded(node) then for _,child in ipairs(node.children) do visit(child) end end
+    end
+    for _,node in ipairs(self.nodes) do if not node.parent then visit(node) end end
     return out
 end

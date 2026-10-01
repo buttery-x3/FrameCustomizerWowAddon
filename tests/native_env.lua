@@ -9,7 +9,7 @@ function canaccessvalue(v) return v~=N.inaccessible end
 function issecretvalue(v) return v==N.inaccessible end
 function canaccesstable(v) return v~=N.inaccessibleTable end
 Enum={SecretAspect={},ForbiddenAspect={}}
-for _,key in ipairs({"Alpha","VertexColor","Hierarchy","ObjectName","ObjectType","Scale","Shown"}) do Enum.SecretAspect[key]=key end
+for _,key in ipairs({"Alpha","VertexColor","Hierarchy","ObjectName","ObjectType","Scale","Shown","Attributes"}) do Enum.SecretAspect[key]=key end
 for _,key in ipairs({"SetTexture","ScriptBindings","UntrustedLayoutScriptExecution"}) do Enum.ForbiddenAspect[key]=key end
 C_RestrictedActions={CheckAllowProtectedFunctions=function(o,silent) assert(silent==true); return o.protectedAllowed~=false end}
 C_Texture={GetAtlasInfo=function(name) if name=="KnownAtlas" then return {width=16,height=16} end end}
@@ -30,6 +30,7 @@ function M:GetName() return self.name end
 function M:GetObjectType() return self.kind end
 function M:GetParent() return self.parent end
 function M:GetParentKey() return self.parentKey end
+function M:GetAttribute(key) return self.attributes and self.attributes[key] end
 function M:GetDebugName() return self.name or self.parentKey or "anonymous label" end
 function M:GetAlpha()
     assert(not self.secretAspects.Alpha,"A getter was invoked despite inaccessible aspect")
@@ -59,7 +60,9 @@ function M:GetWidth() return self.width end
 function M:GetHeight() return self.height end
 function M:ClearAllPoints() changed(self,"ClearAllPoints"); self.points={} end
 function M:SetPoint(...)
-    changed(self,"SetPoint"); local args={...}; self.points[#self.points+1]=args
+    changed(self,"SetPoint"); local args={...}
+    for i,p in ipairs(self.points) do if p[1]==args[1] then self.points[i]=args; return end end
+    self.points[#self.points+1]=args
 end
 function M:GetNumPoints() return #self.points end
 function M:GetPoint(i) return unpack(self.points[i or 1] or {}) end
@@ -108,7 +111,7 @@ function M:GetNumLines() local _,n=self:GetText():gsub("\n",""); return n+1 end
 -- return nil and therefore fail when called; no catch-all successful stub.
 for _,key in ipairs({"SetFrameStrata","EnableMouse","SetJustifyH","SetJustifyV","SetAutoFocus","SetMaxLetters",
     "SetTextInsets","ClearFocus","SetFocus","HighlightText","EnableMouseWheel","RegisterForDrag","SetResizeBounds",
-    "EnableKeyboard","SetPropagateKeyboardInput","StartMoving","StopMovingOrSizing","StartSizing","SetMultiLine"}) do
+    "EnableKeyboard","SetPropagateKeyboardInput","StartMoving","StopMovingOrSizing","StartSizing","SetMultiLine","SetWordWrap"}) do
     M[key]=function(o,...) o.presentation[key]={...} end
 end
 local function object(kind,name,parent)

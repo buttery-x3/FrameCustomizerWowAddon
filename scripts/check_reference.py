@@ -43,12 +43,16 @@ with ZipFile(args.zip) as archive:
     method("TextureUtilsDocumentation", "GetAtlasInfo", "MayReturnNothing = true")
     method("SimpleFontStringAPIDocumentation", "SetFont", "RequiresValidFontAsset", 'Name = "fontHeight"', 'Name = "flags"')
     method("SimpleFontStringAPIDocumentation", "SetTextColor", 'Name = "a"')
+    method("SimpleFontStringAPIDocumentation", "SetWordWrap", 'Name = "wrap"')
     method("SimpleStatusBarAPIDocumentation", "GetStatusBarTexture", 'Type = "SimpleTexture"')
     method("SimpleStatusBarAPIDocumentation", "SetStatusBarTexture", "CheckAllowChangeParent = true")
     method("SimpleStatusBarAPIDocumentation", "SetStatusBarColor", 'Name = "a"')
     for name in ("SetSize", "SetPoint", "ClearAllPoints"):
         method("SimpleScriptRegionResizingAPIDocumentation", name, "IsProtectedFunction = true")
     method("SimpleScriptRegionResizingAPIDocumentation", "GetPoint", "SecretWhenAnchoringSecret = true")
+    method("SimpleScriptRegionResizingAPIDocumentation", "SetPoint", "CheckAllowInheritForbiddenLayoutAspects = true", 'Type = "ScriptRegion"')
+    for name in ("ClearPoint", "AdjustPointsOffset", "SetPointsOffset", "ClearPointsOffset"):
+        method("SimpleScriptRegionResizingAPIDocumentation", name, "IsProtectedFunction = true")
     method("SimpleScriptRegionAPIDocumentation", "IsAnchoringRestricted")
     method("SimpleScriptRegionAPIDocumentation", "IsAnchoringSecret")
     method("InputDocumentation", "GetMouseFoci", 'Type = "table"')
@@ -56,12 +60,16 @@ with ZipFile(args.zip) as archive:
         method("SimpleFrameAPIDocumentation", name, "SecretAspect.Hierarchy")
     for name in ("IsUserPlaced", "IsMovable", "IsResizable", "SetResizeBounds"):
         method("SimpleFrameAPIDocumentation", name)
+    method("SimpleFrameAPIDocumentation", "GetAttribute", "SecretReturnsForAspect", "SecretAspect.Attributes")
+    method("SimpleFrameAPIDocumentation", "SetUserPlaced", 'Name = "userPlaced"')
+    method("SimpleFrameAPIDocumentation", "StartMoving", "IsProtectedFunction = true")
     for file, fragments in {
         "Blizzard_SharedXML/UI.xsd": ['name="parentKey"', 'name="StatusBar"', 'name="FontString"'],
         "Blizzard_SharedXML/SecureScrollTemplates.xml": ['name="UIPanelScrollFrameTemplate"'],
         "Blizzard_EditMode/Shared/EditModeManager.lua": ["registeredSystemFrames", "RegisterSystemFrame", "GetActiveLayoutInfo"],
         "Blizzard_EditMode/Shared/EditModeSystemTemplates.lua": ["RegisterSystemFrame(self)", "systemInfo.anchorInfo"],
         "Blizzard_SharedXML/LayoutFrame.lua": ["IsLayoutFrame", "layoutIndex", "ignoreInLayout"],
+        "Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua": ['UIPanelWindows[frame:GetName()]', 'UIPanelLayout-defined', 'centerFrameSkipAnchoring'],
         "Blizzard_SharedXMLBase/Pools.lua": ["function ObjectPoolBaseMixin:Acquire()", "function ObjectPoolBaseMixin:Release("],
         "Blizzard_Dispatcher/Blizzard_Dispatcher.lua": ["hooksecurefunc(functionOwner, functionName", "securehooks can not be removed"],
         "Blizzard_ChatFrameBase/Shared/SlashCommands.lua": ["ReloadUI();"],
