@@ -27,7 +27,7 @@ local aspects={GetAlpha={"Alpha"},GetVertexColor={"VertexColor","Alpha"},GetText
 local readable={GetAlpha=true,GetAtlas=true,GetTexture=true,GetVertexColor=true,GetTextColor=true,GetFont=true,
     GetStatusBarColor=true,GetStatusBarTexture=true,GetSize=true,GetNumPoints=true,GetPoint=true,GetParent=true,
     GetName=true,GetObjectType=true,GetParentKey=true,GetDebugName=true,GetNumChildren=true,GetNumRegions=true,
-    GetAttribute=true,GetRect=true,GetEffectiveScale=true,IsShown=true,IsVisible=true,GetFrameStrata=true,GetFrameLevel=true,GetDrawLayer=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
+    GetAttribute=true,GetRect=true,GetEffectiveScale=true,IsShown=true,IsVisible=true,GetFrameStrata=true,GetFrameLevel=true,HasFixedFrameStrata=true,HasFixedFrameLevel=true,GetDrawLayer=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
 local geometryRead={GetSize=true,GetPoint=true,GetRect=true,GetEffectiveScale=true}
 local writable={SetAlpha=true,SetTexture=true,SetAtlas=true,SetVertexColor=true,SetFont=true,SetTextColor=true,
     SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true,SetFrameStrata=true,SetFrameLevel=true,SetDrawLayer=true}
@@ -345,6 +345,8 @@ function A:write(o,key,...)
         if not self:noForbidden(o,"SetTexture") then error("FrameCustomizer: texture permission changed") end
     end
     if key=="SetFrameStrata" or key=="SetFrameLevel" then
+        local identity=self.visualIdentity and self.visualIdentity[o]
+        if self.owned[o] and identity and identity.part=="frame" then return self:writeVisualLayer(o,key,...) end
         local ok,why=self:protected(o)
         if not ok then
             local result=U.geometryResult("layer"); result.native=U.finding("denied","protected_denied",why); U.deferGeometry(result,why)

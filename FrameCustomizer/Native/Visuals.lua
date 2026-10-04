@@ -11,6 +11,33 @@ local function frameFor(a,o)
     local p=a:parent(o)
     if p and P.applicable(P.byID.frameLayer,a:kind(p)) then return p end
 end
+function A:writeVisualLayer(o,key,value)
+    -- Only registered addon-owned hosts use this path. Fixed levels can ignore
+    -- explicit setters; follow Blizzard's unlock / set / lock sequence.
+    local fixed=key=="SetFrameStrata" and "SetFixedFrameStrata" or "SetFixedFrameLevel"
+    local function guarded(method,value)
+        local ok,why=call(self,o,method,value)
+        if not ok then
+            local result=U.geometryResult("layer"); result.native=U.finding("denied","protected_denied",why); U.deferGeometry(result,why)
+        end
+    end
+    local ok,err=pcall(function() guarded(fixed,false); guarded(key,value) end)
+    -- Restore the lock even after a setter error, but never around a native
+    -- denial. Configuration retries any lock left pending by lost permission.
+    local locked,lockErr=pcall(guarded,fixed,true)
+    if not ok then error(err,0) end
+    if not locked then error(lockErr,0) end
+end
+function A:lockVisualLayers(o)
+    for _,part in ipairs({"Strata","Level"}) do
+        local ok,fixed=self:read(o,"HasFixedFrame"..part)
+        if not ok or type(fixed)~="boolean" then return false,"inaccessible: visual layer lock" end
+        if not fixed then
+            local locked,why=call(self,o,"SetFixedFrame"..part,true); if not locked then return false,why end
+        end
+    end
+    return true
+end
 function A:visualPlan(v)
     local target,container=UIParent,UIParent
     if v.placement=="target" then
@@ -108,6 +135,10 @@ function A:configureVisual(slot,v,plan,changed)
     layout(f,points,l.mode=="fixed" and l.width or nil,l.height)
     layout(t,{{"TOPLEFT",f,"TOPLEFT",0,0},{"BOTTOMRIGHT",f,"BOTTOMRIGHT",0,0}})
     ok,why=property(self,f,"frameLayer",plan.layer); if not ok then return false,why end
+    ok,why=self:lockVisualLayers(f); if not ok then return false,why end
+    local observed=P.byID.frameLayer.read(self,f)
+    if not observed then return false,"inaccessible: visual strata / frame level verification" end
+    if not U.equal(observed,plan.layer) then return false,"pending: visual strata / frame level did not match requested settings" end
     for _,key in ipairs({"texture","tint","drawLayer"}) do
         ok,why=property(self,t,key,v.style[key]); if not ok then return false,why end
     end

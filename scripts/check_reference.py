@@ -41,6 +41,8 @@ with ZipFile(args.zip) as archive:
         method("SimpleFrameAPIDocumentation", name, "IsProtectedFunction = true")
     method("SimpleFrameAPIDocumentation", "GetFrameLevel", "SecretReturnsForAspect", "SecretAspect.FrameLevel")
     method("SimpleFrameAPIDocumentation", "GetFrameStrata", 'Type = "FrameStrata"')
+    for name in ("HasFixedFrameStrata", "HasFixedFrameLevel"):
+        method("SimpleFrameAPIDocumentation", name, 'Name = "isFixed"', 'Type = "bool"')
     method("SimpleFrameAPIDocumentation", "CreateTexture", 'SecretArguments = "NotAllowed"', 'Type = "SimpleTexture"')
     method("SimpleScriptRegionAPIDocumentation", "EnableMouse", "IsProtectedFunction = true")
     for file in ("SimpleFrameAPIDocumentation", "SimpleScriptRegionAPIDocumentation"):
@@ -74,6 +76,15 @@ with ZipFile(args.zip) as archive:
     method("SimpleFrameAPIDocumentation", "GetAttribute", "SecretReturnsForAspect", "SecretAspect.Attributes")
     method("SimpleFrameAPIDocumentation", "SetUserPlaced", 'Name = "userPlaced"')
     method("SimpleFrameAPIDocumentation", "StartMoving", "IsProtectedFunction = true")
+    for name in ("StopMovingOrSizing", "SetClampedToScreen"):
+        method("SimpleFrameAPIDocumentation", name, "IsProtectedFunction = true")
+    method("SimpleFrameAPIDocumentation", "SetMovable", 'Name = "movable"')
+    # Owned visual layer writes follow the exact unlock / set / lock order.
+    talent = source("Blizzard_SharedTalentUI/Blizzard_SharedTalentFrame.lua")
+    start = talent.index("function TalentFrameBaseMixin:SetElementFrameLevel(")
+    body = talent[start:talent.index("\nend", start)]
+    assert body.index("element:SetFixedFrameLevel(false)") < body.index("element:SetFrameLevel(frameLevel)") < body.index("element:SetFixedFrameLevel(true)")
+    checks += 1
     for file, fragments in {
         "Blizzard_SharedXML/UI.xsd": ['name="parentKey"', 'name="StatusBar"', 'name="FontString"'],
         "Blizzard_SharedXML/SecureScrollTemplates.xml": ['name="UIPanelScrollFrameTemplate"'],

@@ -94,12 +94,20 @@ function M:IsVisible()
     assert(not self.secretAspects.Shown,"Secret visibility must not be read")
     return self.shown and (not self.parent or self.parent:IsVisible())
 end
-function M:SetFrameStrata(s) changed(self,"SetFrameStrata"); self.strata=s end
+function M:SetFrameStrata(s)
+    changed(self,"SetFrameStrata")
+    if not (self.ignoreFixedLayerWrites and self.fixedStrata) then self.strata=s end
+end
 function M:GetFrameStrata() return self.strata or "MEDIUM" end
-function M:SetFrameLevel(n) changed(self,"SetFrameLevel"); self.level=n end
+function M:SetFrameLevel(n)
+    changed(self,"SetFrameLevel")
+    if not (self.ignoreFixedLayerWrites and self.fixedLevel) then self.level=n end
+end
 function M:GetFrameLevel() assert(not self.secretAspects.FrameLevel,"Secret level must not be read"); return self.level or 1 end
 function M:SetFixedFrameStrata(v) self.fixedStrata=v end
 function M:SetFixedFrameLevel(v) self.fixedLevel=v end
+function M:HasFixedFrameStrata() return self.fixedStrata==true end
+function M:HasFixedFrameLevel() return self.fixedLevel==true end
 function M:SetDrawLayer(l,s) changed(self,"SetDrawLayer"); self.layer=l; self.sublevel=s end
 function M:GetDrawLayer() return self.layer or "ARTWORK",self.sublevel or 0 end
 function M:SetChecked(on) self.checked=on end
@@ -123,7 +131,7 @@ function M:GetNumLines() local _,n=self:GetText():gsub("\n",""); return n+1 end
 -- return nil and therefore fail when called; no catch-all successful stub.
 for _,key in ipairs({"EnableMouse","SetJustifyH","SetJustifyV","SetAutoFocus","SetMaxLetters",
     "SetTextInsets","ClearFocus","SetFocus","HighlightText","EnableMouseWheel","RegisterForDrag","SetResizeBounds",
-    "EnableKeyboard","SetPropagateKeyboardInput","StartMoving","StopMovingOrSizing","StartSizing","SetMultiLine","SetWordWrap"}) do
+    "EnableKeyboard","SetPropagateKeyboardInput","StartMoving","StopMovingOrSizing","SetClampedToScreen","StartSizing","SetMultiLine","SetWordWrap"}) do
     M[key]=function(o,...) o.presentation[key]={...} end
 end
 local function object(kind,name,parent)

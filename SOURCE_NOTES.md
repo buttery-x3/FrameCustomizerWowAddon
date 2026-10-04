@@ -36,6 +36,16 @@ Public secondary reference: [maintainer's LibSharedMedia-3.0 API documentation](
 
 The source audit script checks these declarations as text. Existence of declarations is **not** a claim of unrestricted native access. Live permission guards and the outstanding client acceptance checks are required.
 
+## Visual editor and fixed-layer correction (0.4.1)
+
+The audit checks **94 contracts** against the same supplied ZIP and fingerprint. It adds Boolean `HasFixedFrameStrata`/`HasFixedFrameLevel` declarations, `SetMovable`, protected `StopMovingOrSizing` and `SetClampedToScreen`, and the exact fixed-level setter ordering below. The existing `StartMoving` protected declaration remains audited.
+
+`Blizzard_SharedTalentUI/Blizzard_SharedTalentFrame.lua`, `TalentFrameBaseMixin:SetElementFrameLevel` (lines 816–821), explicitly calls `SetFixedFrameLevel(false)`, `SetFrameLevel(frameLevel)`, then `SetFixedFrameLevel(true)`. This is the source basis for temporarily unlocking our own hosts around layer writes instead of assuming fixed setters always take effect. `Blizzard_UnitFrame/Shared/PlayerFrame.lua` also sets casting-bar strata before setting its fixed-strata flag. These are generic operation examples, not production frame-name exceptions. Applying the same unlock/set/relock lifecycle to our strata flag is an implementation inference; generated declarations do not establish all native fixed-flag semantics.
+
+Every unlock, layer write and relock checks native object access and protected permission independently. A denied relock is retried during owned-host configuration, including when the desired layer already matches. Returned layer and lock values pass normal access checks; FrameLevel secrecy is retained. Actual layer readback is required before a created visual becomes ready. This prevents a silent setter refusal from being reported as active, but it does not prove rendered overlap order. Ordinary existing-object edits never clear fixed flags. Title-bar movement only affects the addon editor, with protected permission checks before StartMoving/StopMovingOrSizing and clamping.
+
+The user's initial 0.4.0 test reported immovable visual editing and strata apparently being ignored. It did not establish the selected layer relationship or isolate native fixed-flag behaviour. The fixes cover both the write sequence and the previously ambiguous manual controls in behind mode. Native rendering, actual drag behaviour, combat/taint transitions and overlap ordering still require client retesting.
+
 ## Created visuals and layering contracts (0.4.0)
 
 The read-only audit now checks **88 contracts** against the same supplied ZIP and fingerprint. Additional declarations:
