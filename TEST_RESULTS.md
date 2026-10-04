@@ -1,5 +1,25 @@
 # Test results
 
+## Visual editor and layer fixes — 2026-10-04
+
+**FrameCustomizer 0.4.1 / visual-editor-layer-fix** addresses the user's initial 0.4.0 client report: the visual editor could not be moved, strata appeared ineffective, and the dismissal button said Cancel. The editor now has a clamped title-bar drag region, retains session placement across Save/reopen, and uses **Close**. Editing strata or frame level selects manual layering so behind mode cannot silently replace those edits.
+
+Owned panel layer writes now unlock, set, and relock with a fresh native permission check at every step. A denied relock is retried even if the layer value already matches. Configuration requires readable matching strata/level before reporting readiness; silent refusal or inaccessible readback remains visible as a pending/inaccessible status. Existing-object fixed flags and saved schema are unchanged.
+
+| Validation | Result |
+| --- | --- |
+| `scripts/check.py` | PASS: 114 offline scenarios (30 core, 17 native-contract, 24 regression, 18 geometry-policy, 25 visual), including five new regression scenarios. All fourteen shipped Lua modules compile under Lua 5.1. |
+| `scripts/check_reference.py --zip 'D:/Games/World of Warcraft/_classic_beta_/BlizzardInterfaceCode.zip'` | PASS: 94 contracts; original ZIP SHA-256 unchanged. Includes fixed-flag getters, movement/clamping methods, and Blizzard's unlock/set/relock frame-level ordering. |
+| `scripts/package.py` | PASS: final full suite, manifest, archive integrity and every member compared with source; 17 allowlisted files. |
+| Deployment tests | Not rerun: packaging/deployment logic and the file manifest are unchanged. No game deployment performed. |
+| `git diff --check` | PASS. |
+
+Package: `dist/FrameCustomizer-0.4.1.zip`, 54,476 bytes. SHA-256: `a9963c300830ac42d05a25802263b31334eda42c4c8ae484194e47d7d0d81c55`, also recorded in the adjacent `.sha256` file. No real game installation or account data was modified.
+
+New regression coverage includes explicit layer changes on fixed hosts, engine-only correction after missed notifications, target-relative behind changes, denials before a setter and before relocking, lock restoration after an injected error, ignored setters, secret layer readback, guarded title dragging/stopping, Close without saving, retained editor position, and automatic manual selection without changing saved behind mode during form loading. The recorder's fixed-setter refusal is an opt-in fault model, not native WoW emulation.
+
+**Client retesting remains required:** drag the editor off an obscured visual, save/reopen and confirm position; close with unsaved edits; change manual strata/level and inspect overlapping frames; switch back to behind and verify target-relative ordering. Repeat at the user's UI scale and across combat/restriction changes. The reported strata failure did not establish whether behind mode or fixed flags caused that particular observation. Offline checks and the source pattern do not establish actual rendering, taint safety or native drag behaviour.
+
 ## Created visuals and layering — 2026-10-04
 
 **FrameCustomizer 0.4.0 / created-visuals-1** is implemented and packaged. **109 offline scenarios pass: 30 core, 17 native-contract, 24 explorer/media/geometry, 18 geometry-policy, and 20 created-visual scenarios.** All fourteen shipped Lua modules compile under Lua 5.1 and match the TOC manifest. Earlier client observations about existing edits remain useful, but **none of this release's new behaviour has been executed in the WoW client during this task**.

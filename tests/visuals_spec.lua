@@ -126,6 +126,59 @@ test("shared layer properties enforce constants and recheck every protected sett
     f.SetFrameStrata=setter; f.protectedAllowed=true
     local t=f:CreateTexture(nil,"ARTWORK"); P.byID.drawLayer.write(a,t,{layer="BORDER",sublevel=-2}); equal(P.byID.drawLayer.read(a,t),{layer="BORDER",sublevel=-2})
 end)
+test("owned layers unlock for saved changes and shared enforcement then restore locks",function()
+    local a,db,c,e=setup(); local id,s=save(c,e); local f=s.frame
+    -- Opt-in refusal models a setter being ignored while fixed; not a claim
+    -- that the recorder implements the client's native layering semantics.
+    f.ignoreFixedLayerWrites=true
+    local v=U.copy(db.visuals[id]); v.style.frameLayer={strata="HIGH",level=37}
+    assert(c:save(id,v)); e:sync(); advance(c,e)
+    equal(P.byID.frameLayer.read(a,f),v.style.frameLayer); assert(s.ready and f.fixedStrata and f.fixedLevel)
+    -- An external writer bypasses hooks; shared readable verification repairs it.
+    f.strata="LOW"; f.level=2
+    for _=1,60 do N.time=N.time+0.05; e:tick() end
+    equal(P.byID.frameLayer.read(a,f),v.style.frameLayer); assert(f.fixedStrata and f.fixedLevel)
+    local target=frame("VisualFixedBehind"); v=V.default(R.describe(a,target)); assert(c:save(id,v)); e:sync(); advance(c,e)
+    target:SetFrameStrata("DIALOG"); target:SetFrameLevel(19); advance(c,e)
+    assert(s.ready and f.strata=="DIALOG" and f.level==18 and f.fixedStrata and f.fixedLevel)
+    assert(not target.fixedStrata and not target.fixedLevel)
+    e:pause(true)
+end)
+
+test("owned layer writes stop on mid-sequence denial and recover a pending lock",function()
+    local a,db,c,e=setup(); local id,s=save(c,e); local f=s.frame
+    local fixed,level=f.SetFixedFrameLevel,f.SetFrameLevel
+    f.SetFixedFrameLevel=function(o,v) fixed(o,v); if not v then o.protectedAllowed=false end end
+    local old=f.level; local calls=f.calls.SetFrameLevel
+    local ok,err=pcall(a.write,a,f,"SetFrameLevel",42)
+    assert(not ok and U.isGeometryDeferred(err) and f.level==old and f.calls.SetFrameLevel==calls and not f.fixedLevel)
+    f.SetFixedFrameLevel=fixed; f.protectedAllowed=true; c:changed(); s.verify=0; advance(c,e)
+    assert(s.ready and f.fixedLevel)
+    -- Permission can also change after the value lands, before the relock.
+    f.SetFrameLevel=function(o,v) level(o,v); o.protectedAllowed=false end
+    ok,err=pcall(a.write,a,f,"SetFrameLevel",old)
+    assert(not ok and U.isGeometryDeferred(err) and not f.fixedLevel)
+    f.SetFrameLevel=level; f.protectedAllowed=true; c:changed(); s.verify=0; advance(c,e)
+    assert(s.ready and f.fixedLevel and (s.errors or 0)==0)
+    f.SetFrameLevel=function() error("injected layer write error") end
+    ok,err=pcall(a.write,a,f,"SetFrameLevel",old)
+    assert(not ok and tostring(err):find("injected layer write error") and f.fixedLevel)
+    f.SetFrameLevel=level
+    e:pause(true)
+end)
+
+test("visual layer readback exposes ignored setters instead of reporting active",function()
+    local _,db,c,e=setup(); local id,s=save(c,e); local f=s.frame; local setter=f.SetFrameStrata
+    f.SetFrameStrata=function() end
+    local v=U.copy(db.visuals[id]); v.style.frameLayer.strata="HIGH"; assert(c:save(id,v)); e:sync(); advance(c,e)
+    assert(not s.ready and not f:IsShown() and s.status:find("did not match") and (s.errors or 0)==0)
+    f.SetFrameStrata=setter; advance(c,e); assert(s.ready and f:IsShown() and f.strata=="HIGH")
+    f.secretAspects.FrameLevel=true; s.verify=0; c:changed(); advance(c,e)
+    assert(not s.ready and s.status:find("verification") and not f:IsShown())
+    f.secretAspects.FrameLevel=nil; advance(c,e); assert(s.ready)
+    e:pause(true)
+end)
+
 test("saved visual diagnostics inspect no live values",function()
     local _,_,c,e=setup(); local id,s=save(c,e)
     s.frame.GetFrameLevel=function() error("diagnostics must not read") end
@@ -175,7 +228,7 @@ test("missing required native predicates deny new layer and visibility operation
     local ok=a:showVisual(s,false); assert(not ok and s.frame.level==old and s.frame:IsShown())
     C_RestrictedActions.CheckAllowProtectedFunctions=original; e:pause(true)
 end)
-test("both Add visual entry points share a cancel-safe editor and independent defaults",function()
+test("both Add visual entry points share an editor with safe closing and independent defaults",function()
     FC.SetPaused(false); UI:build(); local f=frame("VisualEditorTarget"); UI:select(f)
     local before=U.copy(FC.db.visuals); UI.addVisual.scripts.OnClick(UI.addVisual)
     local form=UI.visualFrame; assert(form.fields.target:GetText()=="" and form.fields.mode.value=="fixed")
@@ -190,6 +243,40 @@ test("both Add visual entry points share a cancel-safe editor and independent de
     UI:editVisual(id); form.enabled:SetChecked(false); UI:saveVisual(); N.advance(0.4); assert(not FC.visuals.slots[id])
     UI:visualList(); assert(#UI.listFrame.items>=1)
     UI:editVisual(id); form.delete.scripts.OnClick(); assert(not FC.db.visuals[id])
+end)
+
+test("visual editor drags by its title and preserves placement without saving draft edits",function()
+    UI:editVisual(); local f=UI.visualFrame; local before=U.copy(FC.db.visuals)
+    assert(f.movable and f.presentation.SetClampedToScreen[1] and f.close.text:GetText()=="Close")
+    assert(f.drag.presentation.RegisterForDrag[1]=="LeftButton")
+    f.presentation.StartMoving=nil; f.protectedAllowed=false; f.drag.scripts.OnDragStart()
+    assert(not f.presentation.StartMoving)
+    f.protectedAllowed=true; f.drag.scripts.OnDragStart(); assert(f.moving and f.presentation.StartMoving)
+    f.presentation.StopMovingOrSizing=nil; f.protectedAllowed=false; f.drag.scripts.OnDragStop()
+    assert(f.stopPending and f.moving and not f.presentation.StopMovingOrSizing)
+    f.protectedAllowed=true; f.scripts.OnUpdate(f,0.05); assert(not f.moving and not f.stopPending)
+    f.drag.scripts.OnDragStart()
+    -- Native dragging supplies the new anchor; the recorder only verifies the
+    -- handler wiring and that reopening/saving never re-centres the editor.
+    f:ClearAllPoints(); f:SetPoint("TOPLEFT",UIParent,"TOPLEFT",30,-40)
+    f.drag.scripts.OnDragStop(); assert(not f.moving and f.presentation.StopMovingOrSizing)
+    local points={{"TOPLEFT",UIParent,"TOPLEFT",30,-40}}; f.fields.name:SetText("Unsaved draft")
+    f.drag.scripts.OnDragStart(); f.close.scripts.OnClick(); assert(not f.moving and not f:IsShown())
+    equal(before,FC.db.visuals); UI:editVisual(); equal(points,f.points)
+    UI:saveVisual(); equal(points,f.points); f.delete.scripts.OnClick()
+end)
+
+test("editing manual layer values changes the relationship while loading preserves behind mode",function()
+    local target=frame("VisualLayerEditor"); UI:editVisual(nil,R.describe(FC.adapter,target)); local f=UI.visualFrame
+    assert(f.fields.layerMode.value=="behind")
+    f.fields.strata.scripts.OnClick(f.fields.strata); assert(f.fields.layerMode.value=="manual")
+    UI:saveVisual(); local id=f.id; assert(FC.db.visuals[id].layerMode=="manual")
+    f.fields.layerMode.scripts.OnClick(f.fields.layerMode); assert(f.fields.layerMode.value=="behind")
+    UI:saveVisual(); assert(f.fields.layerMode.value=="behind" and FC.db.visuals[id].layerMode=="behind")
+    f.fields.level:SetText("23"); f.fields.level.scripts.OnTextChanged(f.fields.level,true)
+    assert(f.fields.layerMode.value=="manual"); UI:saveVisual(); N.advance(0.5)
+    assert(FC.db.visuals[id].style.frameLayer.level==23 and FC.visuals.slots[id].frame.level==23)
+    f.delete.scripts.OnClick()
 end)
 test("unavailable saved attachment stays editable without guessing its replacement",function()
     local f=frame("VisualEditorMissing"); local target=R.describe(FC.adapter,f)
