@@ -11,7 +11,7 @@ local function texture(name,parent)
 end
 test("strict TOC bootstrap and addon initialization",function()
     assert(SlashCmdList.FRAMECUSTOMIZER); assert(not FC.engine)
-    N.event("ADDON_LOADED","FrameCustomizer"); assert(FC.engine and FrameCustomizerDB.version==1)
+    N.event("ADDON_LOADED","FrameCustomizer"); assert(FC.engine and FrameCustomizerDB.version==2)
     N.event("PLAYER_LOGIN"); N.advance(0.2); assert(#N.errors==0)
 end)
 test("object access, forbidden and missing guard fail closed",function()
@@ -102,6 +102,9 @@ test("native scenario orchestrator uses same engine, cleans up and bounds hooks"
     -- This checks the orchestration offline, NOT the truth of native results.
     SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(30); assert(not FC.Playground.run)
     assert(FC.Playground.lastReport and not FC.Playground.lastReport:find("FAIL",1,true),FC.Playground.lastReport)
+    for _,name in ipairs({"Independent click-through panel", "Attach panel to full status-bar", "Attached panel follows container", "Fixed panel dimensions", "Pause All stops queued writes and retires"}) do
+        assert(FC.Playground.lastReport:find("PASS "..name,1,true),FC.Playground.lastReport)
+    end
     local first=N.hooks
     SlashCmdList.FRAMECUSTOMIZER("test"); N.advance(30); assert(not FC.Playground.run)
     assert(not FC.Playground.lastReport:find("FAIL",1,true),FC.Playground.lastReport)

@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: FrameCustomizer
-## Notes: Inspect existing UI objects and author declarative cosmetic overrides.
+## Notes: Customise existing UI objects and create independent or attached visuals.
 ## Author: FrameCustomizer contributors
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: FrameCustomizerDB, FrameCustomizerSafeMode
 ## OptionalDeps: LibSharedMedia-3.0, SharedMedia
 ## X-FrameCustomizer-Assets: Media/Transparent.tga
@@ -10,11 +10,14 @@ Core/Util.lua
 Core/Anchors.lua
 Core/Properties.lua
 Core/Schema.lua
+Core/Visuals.lua
 Core/Resolver.lua
 Core/Engine.lua
 Native/Adapter.lua
+Native/Visuals.lua
 Native/Discovery.lua
 UI/Editor.lua
+UI/VisualEditor.lua
 Native/Playground.lua
 Bootstrap.lua
 

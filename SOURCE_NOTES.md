@@ -36,6 +36,22 @@ Public secondary reference: [maintainer's LibSharedMedia-3.0 API documentation](
 
 The source audit script checks these declarations as text. Existence of declarations is **not** a claim of unrestricted native access. Live permission guards and the outstanding client acceptance checks are required.
 
+## Created visuals and layering contracts (0.4.0)
+
+The read-only audit now checks **88 contracts** against the same supplied ZIP and fingerprint. Additional declarations:
+
+- `SimpleFrameAPIDocumentation.lua`: SetFrameStrata, SetFrameLevel, SetFixedFrameStrata, SetFixedFrameLevel, Show and Hide are protected operations. GetFrameLevel has the FrameLevel secret aspect; GetFrameStrata returns FrameStrata. CreateTexture accepts a draw layer and returns SimpleTexture, with secret arguments disallowed.
+- `SimpleScriptRegionAPIDocumentation.lua`: EnableMouse is protected. Both this file and SimpleFrame declare IsVisible with the Shown secret aspect. Frame Show/Hide use the stricter Frame declarations, not the unprotected ScriptRegion declarations.
+- `SimpleRegionAPIDocumentation.lua`: GetDrawLayer returns layer/sublayer; SetDrawLayer accepts layer/sublevel, defaulting sublevel to zero.
+
+The production adapter rechecks native object access and `CheckAllowProtectedFunctions(object, true)` before each protected layer, host visibility and host-setup setter. Visibility/level reads check their secret aspects and returned values. Created SetPoint/ClearAllPoints/SetSize calls retain the existing per-setter geometry guards, including relative forbidden-layout checks for SetPoint. Registered-system policy is assessed on the object being changed, not transferred from its anchor target.
+
+Hosts use ordinary `CreateFrame("Frame", nil, UIParent)` as already used by the editor, plus one CreateTexture. No Blizzard template or native target parenting is used. The export does not supply a generated declaration for the global CreateFrame; the similarly named C_PingSecure function is unrelated and is not used as evidence. Creation is limited to accessible UIParent with no forbidden layout aspect, and setup/access predicates are checked on the returned host. Native acceptance of creation in each client context remains unverified.
+
+The eight supported strata, level range 0..10000 and sublevel range -8..7 are explicit addon representation limits, not a claim that this export enumerates every native numeric limit. Behind mode means the readable target frame's strata at level minus one; level zero or unrepresentable data produces an explicit reason. This arithmetic is a rendering assumption requiring native validation, particularly at mixed strata, overlapping siblings and restricted hierarchies. It does not promise ordering behind an individual region within the same native frame.
+
+Direct anchors are expected to follow target bounds; fixed dimensions, offsets and padding are in the host's UIParent coordinate units. Native scaling, inherited forbidden aspects, parent-hidden transitions and clipping need inspection. Visibility is sampled from an accessible container instead of inherited from the target; target alpha and scrolling clips are not copied. Successful declaration audits or offline API recording do not establish those behaviours, native taint safety or immediate cleanup under denied permissions.
+
 ## Geometry interpretation and remaining assumptions (0.3.0)
 
 The expanded read-only ZIP audit verifies 74 contracts against the same fingerprint above. SetPoint accepts a ScriptRegion relative and the object exposes multiple GetPoint anchors; the declaration does not limit relatives to the parent. ClearPoint, AdjustPointsOffset, SetPointsOffset and ClearPointsOffset are additional protected setter signals. GetAttribute uses the Attributes secret aspect. Editor SetWordWrap exists in this export.

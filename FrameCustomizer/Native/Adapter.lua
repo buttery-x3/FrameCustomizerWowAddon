@@ -23,14 +23,14 @@ end
 local aspects={GetAlpha={"Alpha"},GetVertexColor={"VertexColor","Alpha"},GetTextColor={"VertexColor","Alpha"},
     GetStatusBarColor={"VertexColor","Alpha"},GetName={"ObjectName"},GetObjectType={"ObjectType"},
     GetParent={"Hierarchy"},GetNumChildren={"Hierarchy"},GetNumRegions={"Hierarchy"},GetChildren={"Hierarchy"},GetRegions={"Hierarchy"},
-    GetEffectiveScale={"Scale"},IsShown={"Shown"},GetAttribute={"Attributes"}}
+    GetEffectiveScale={"Scale"},IsShown={"Shown"},IsVisible={"Shown"},GetFrameLevel={"FrameLevel"},GetAttribute={"Attributes"}}
 local readable={GetAlpha=true,GetAtlas=true,GetTexture=true,GetVertexColor=true,GetTextColor=true,GetFont=true,
     GetStatusBarColor=true,GetStatusBarTexture=true,GetSize=true,GetNumPoints=true,GetPoint=true,GetParent=true,
     GetName=true,GetObjectType=true,GetParentKey=true,GetDebugName=true,GetNumChildren=true,GetNumRegions=true,
-    GetAttribute=true,GetRect=true,GetEffectiveScale=true,IsShown=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
+    GetAttribute=true,GetRect=true,GetEffectiveScale=true,IsShown=true,IsVisible=true,GetFrameStrata=true,GetFrameLevel=true,GetDrawLayer=true,IsUserPlaced=true,IsMovable=true,IsResizable=true}
 local geometryRead={GetSize=true,GetPoint=true,GetRect=true,GetEffectiveScale=true}
 local writable={SetAlpha=true,SetTexture=true,SetAtlas=true,SetVertexColor=true,SetFont=true,SetTextColor=true,
-    SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true}
+    SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true,SetFrameStrata=true,SetFrameLevel=true,SetDrawLayer=true}
 function A.new()
     return setmetatable({owned=setmetatable({},{__mode="k"}),fixtures=setmetatable({},{__mode="k"}),lastError=-100},A)
 end
@@ -94,6 +94,7 @@ function A:excluded(o)
     for _=0,FC.LIMITS.depth do
         if not o then return false end
         if not self:inspectable(o) then return true end
+        if self.visualIdentity and self.visualIdentity[o] then return false end
         if self.fixtures[o] then return false end
         if self.owned[o] then return true end
         if o==UIParent then return false end
@@ -315,6 +316,7 @@ function A:canWrite(o,d,value)
         if not method(o,key) then return deny("native","unavailable","setter_missing","Native capability unavailable: missing method "..key,false) end
     end
     if d.permission=="geometry" then return self:geometryPermission(o,d,value) end
+    if d.permission=="protected" then return self:protected(o) end
     if d.permission=="texture" then
         if not self:noForbidden(o,"SetTexture") then return false,"Texture changes forbidden or permission check unavailable",true end
         if value.kind=="atlas" then
@@ -342,6 +344,12 @@ function A:write(o,key,...)
     if key=="SetTexture" or key=="SetAtlas" then
         if not self:noForbidden(o,"SetTexture") then error("FrameCustomizer: texture permission changed") end
     end
+    if key=="SetFrameStrata" or key=="SetFrameLevel" then
+        local ok,why=self:protected(o)
+        if not ok then
+            local result=U.geometryResult("layer"); result.native=U.finding("denied","protected_denied",why); U.deferGeometry(result,why)
+        end
+    end
     if geometry then
         local _,relative=...
         local result=U.geometryResult(key=="SetSize" and "size" or "position")
@@ -360,6 +368,13 @@ function A:write(o,key,...)
     if not safe(success) then return end
     if success==false then error("FrameCustomizer: native setter rejected configured value") end
 end
+function A:protected(o)
+    local ok,why=self:inspectable(o); if not ok then return false,why,true end
+    if not C_RestrictedActions or type(C_RestrictedActions.CheckAllowProtectedFunctions)~="function" then return false,"Protected-operation permission API unavailable",true end
+    local allowed=C_RestrictedActions.CheckAllowProtectedFunctions(o,true)
+    if not safe(allowed) or allowed~=true then return false,"Protected operation denied or permission result inaccessible",true end
+    return true
+end
 function A:hook(o,key,callback)
     if not self:inspectable(o) or not method(o,key) or not self:noForbidden(o,"ScriptBindings") or type(hooksecurefunc)~="function" then return false end
     -- This protects the scheduler from an unexpected hook-install error; it is
@@ -376,6 +391,9 @@ function A:onError(err)
     if type(geterrorhandler)=="function" then geterrorhandler()("FrameCustomizer: "..detail) end
 end
 function A:label(o)
+    if not self:inspectable(o) then return "unavailable" end
+    local identity=self.visualIdentity and self.visualIdentity[o]
+    if identity then return "[FC] "..U.joinTarget(identity) end
     local key=self:parentKey(o)
     if key then return U.cleanLabel(key) end
     local name=self:name(o)

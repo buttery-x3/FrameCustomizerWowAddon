@@ -53,4 +53,5 @@ for file in files:
 native_count = load(native, "tests/native_spec.lua", ns)
 revision_count = load(native, "tests/revision_spec.lua", ns)
 geometry_count = load(native, "tests/geometry_policy_spec.lua", ns)
-print(f"ALL CHECKS PASSED: {core_count} core scenarios; {native_count} native-adapter/load/UI-recording scenarios; {revision_count} explorer/media/geometry regressions; {geometry_count} geometry policy scenarios", flush=True)
+visual_count = load(native, "tests/visuals_spec.lua", ns)
+print(f"ALL CHECKS PASSED: {core_count} core scenarios; {native_count} native-adapter/load/UI-recording scenarios; {revision_count} explorer/media/geometry regressions; {geometry_count} geometry policy scenarios; {visual_count} created visual scenarios", flush=True)

@@ -9,7 +9,7 @@ function canaccessvalue(v) return v~=N.inaccessible end
 function issecretvalue(v) return v==N.inaccessible end
 function canaccesstable(v) return v~=N.inaccessibleTable end
 Enum={SecretAspect={},ForbiddenAspect={}}
-for _,key in ipairs({"Alpha","VertexColor","Hierarchy","ObjectName","ObjectType","Scale","Shown","Attributes"}) do Enum.SecretAspect[key]=key end
+for _,key in ipairs({"Alpha","VertexColor","Hierarchy","ObjectName","ObjectType","Scale","Shown","Attributes","FrameLevel"}) do Enum.SecretAspect[key]=key end
 for _,key in ipairs({"SetTexture","ScriptBindings","UntrustedLayoutScriptExecution"}) do Enum.ForbiddenAspect[key]=key end
 C_RestrictedActions={CheckAllowProtectedFunctions=function(o,silent) assert(silent==true); return o.protectedAllowed~=false end}
 C_Texture={GetAtlasInfo=function(name) if name=="KnownAtlas" then return {width=16,height=16} end end}
@@ -90,6 +90,18 @@ function M:RegisterEvent(name) self.events[name]=true end
 function M:Show() self.shown=true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
 function M:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
 function M:IsShown() return self.shown end
+function M:IsVisible()
+    assert(not self.secretAspects.Shown,"Secret visibility must not be read")
+    return self.shown and (not self.parent or self.parent:IsVisible())
+end
+function M:SetFrameStrata(s) changed(self,"SetFrameStrata"); self.strata=s end
+function M:GetFrameStrata() return self.strata or "MEDIUM" end
+function M:SetFrameLevel(n) changed(self,"SetFrameLevel"); self.level=n end
+function M:GetFrameLevel() assert(not self.secretAspects.FrameLevel,"Secret level must not be read"); return self.level or 1 end
+function M:SetFixedFrameStrata(v) self.fixedStrata=v end
+function M:SetFixedFrameLevel(v) self.fixedLevel=v end
+function M:SetDrawLayer(l,s) changed(self,"SetDrawLayer"); self.layer=l; self.sublevel=s end
+function M:GetDrawLayer() return self.layer or "ARTWORK",self.sublevel or 0 end
 function M:SetChecked(on) self.checked=on end
 function M:GetChecked() return self.checked or false end
 function M:SetCheckedTexture(t) self.checkedTexture=t end
@@ -109,7 +121,7 @@ function M:GetValue() return self.value end
 function M:GetNumLines() local _,n=self:GetText():gsub("\n",""); return n+1 end
 -- Explicitly accepted editor-only presentation calls. Unknown method names
 -- return nil and therefore fail when called; no catch-all successful stub.
-for _,key in ipairs({"SetFrameStrata","EnableMouse","SetJustifyH","SetJustifyV","SetAutoFocus","SetMaxLetters",
+for _,key in ipairs({"EnableMouse","SetJustifyH","SetJustifyV","SetAutoFocus","SetMaxLetters",
     "SetTextInsets","ClearFocus","SetFocus","HighlightText","EnableMouseWheel","RegisterForDrag","SetResizeBounds",
     "EnableKeyboard","SetPropagateKeyboardInput","StartMoving","StopMovingOrSizing","StartSizing","SetMultiLine","SetWordWrap"}) do
     M[key]=function(o,...) o.presentation[key]={...} end

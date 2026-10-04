@@ -2,13 +2,13 @@ local _,FC=...
 local F={}; F.__index=F
 FC.FakeAdapter=F
 local allowedReads={GetAlpha=true,GetAtlas=true,GetTexture=true,GetVertexColor=true,GetTextColor=true,
-    GetFont=true,GetStatusBarColor=true,GetStatusBarTexture=true,GetSize=true,GetNumPoints=true,GetPoint=true,GetParent=true}
+    GetFont=true,GetStatusBarColor=true,GetStatusBarTexture=true,GetSize=true,GetNumPoints=true,GetPoint=true,GetParent=true,GetFrameStrata=true,GetFrameLevel=true,GetDrawLayer=true}
 local allowedWrites={SetAlpha=true,SetTexture=true,SetAtlas=true,SetVertexColor=true,SetFont=true,SetTextColor=true,
-    SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true}
+    SetStatusBarColor=true,SetSize=true,ClearAllPoints=true,SetPoint=true,SetFrameStrata=true,SetFrameLevel=true,SetDrawLayer=true}
 local signals={SetAlpha=true,SetTexture=true,SetAtlas=true,SetColorTexture=true,SetVertexColor=true,
     SetTextColor=true,SetFont=true,SetFontObject=true,CopyFontObject=true,SetStatusBarColor=true,SetStatusBarTexture=true,
     SetStatusBarAtlas=true,SetSize=true,SetWidth=true,SetHeight=true,ClearAllPoints=true,SetPoint=true,SetAllPoints=true,
-    ClearPoint=true,AdjustPointsOffset=true,SetPointsOffset=true,ClearPointsOffset=true}
+    ClearPoint=true,AdjustPointsOffset=true,SetPointsOffset=true,ClearPointsOffset=true,SetFrameStrata=true,SetFrameLevel=true,SetDrawLayer=true,SetFixedFrameLevel=true,SetFixedFrameStrata=true}
 function F.new() return setmetatable({globals={},time=0,hookCount=0,errorCount=0,writeLog={},readCount=0},F) end
 function F:object(name,kind,parent,key)
     local o={name=name,kind=kind or "Texture",parent=parent,key=key,children={},hooks={},missing={},values={
@@ -54,7 +54,10 @@ function F:read(o,key)
     self.readCount=self.readCount+1
     if o.readError then error("injected read error") end
     local v=o.values
-    if key=="GetAlpha" then return true,v.alpha
+    if key=="GetFrameStrata" then return true,v.strata or "MEDIUM"
+    elseif key=="GetFrameLevel" then return true,v.level or 1
+    elseif key=="GetDrawLayer" then return true,v.layer or "ARTWORK",v.sublevel or 0
+    elseif key=="GetAlpha" then return true,v.alpha
     elseif key=="GetAtlas" then return true,v.atlas
     elseif key=="GetTexture" then return true,v.texture
     elseif key=="GetVertexColor" or key=="GetTextColor" or key=="GetStatusBarColor" then return true,unpack(v.color)
@@ -74,7 +77,10 @@ function F:write(o,key,...)
     assert(not o.missing[key],"Missing fake setter was called")
     if o.failures and o.failures>0 then o.failures=o.failures-1; self:fire(o,key); error("injected setter error") end
     local x={...}; local v=o.values
-    if key=="SetAlpha" then v.alpha=x[1]
+    if key=="SetFrameStrata" then v.strata=x[1]
+    elseif key=="SetFrameLevel" then v.level=x[1]
+    elseif key=="SetDrawLayer" then v.layer=x[1]; v.sublevel=x[2]
+    elseif key=="SetAlpha" then v.alpha=x[1]
     elseif key=="SetTexture" then v.texture=x[1]; v.atlas=""
     elseif key=="SetAtlas" then v.atlas=x[1]
     elseif key=="SetVertexColor" or key=="SetTextColor" or key=="SetStatusBarColor" then v.color=x; v.alpha=x[4]

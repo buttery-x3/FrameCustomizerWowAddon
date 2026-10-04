@@ -1,4 +1,28 @@
-# Test results — 2026-10-01
+# Test results
+
+## Created visuals and layering — 2026-10-04
+
+**FrameCustomizer 0.4.0 / created-visuals-1** is implemented and packaged. **109 offline scenarios pass: 30 core, 17 native-contract, 24 explorer/media/geometry, 18 geometry-policy, and 20 created-visual scenarios.** All fourteen shipped Lua modules compile under Lua 5.1 and match the TOC manifest. Earlier client observations about existing edits remain useful, but **none of this release's new behaviour has been executed in the WoW client during this task**.
+
+Delivered: independent and selected-target Add visual entry points using the same form; solid/file/atlas panels and media selection; fixed or fill sizing with padding; explicit visibility containers; manual and behind-target layering; all/attached visual lists with rename/duplicate/disable/delete; schema 1 to 2 migration; registered component identities; bounded allocation/reuse/retirement; shared property enforcement; frame strata/level and region draw layer/sublevel controls on existing supported objects.
+
+| Validation | Result |
+| --- | --- |
+| `scripts/check.py` | PASS during development; final suite also executed by packaging. Existing 89 scenarios retained and 20 focused scenarios added. |
+| `scripts/check_reference.py --zip 'D:/Games/World of Warcraft/_classic_beta_/BlizzardInterfaceCode.zip'` | PASS, 88 source contracts; same SHA-256 `190d4544587a0aade6b67c6eaba4ba8bd9500e46b261a4cfa3c7553d8c27e2fd`. No alternate client export used. |
+| `scripts/package.py` | PASS, deterministic archive with one addon root and 17 allowlisted files; every member compared with local source. |
+| `scripts/test-deploy.ps1` | PASS, including new module copies, backups, preservation and all existing path/config cases. Only isolated `.tools/deployment-test-a60f648f6def4f848fc26fab1922eda6` fixtures and ignored backup outputs used. |
+| `git diff --check` | PASS. |
+
+Package: `dist/FrameCustomizer-0.4.0.zip`, 53,627 bytes. SHA-256: `5dcdf19b173135036da02a42a4b92ca897a8a2b6ec795bc985816112104ce5a4`, also recorded in the adjacent `.sha256` file. No real game installation or account data was modified.
+
+The new scenarios exercise schema migration and malformed-data preservation, monotonic identities, round trips, creation defaults/cancellation, fixed/fill attachment changes, independent placement, existing Edit Mode targets used only as relatives, visibility containers, secret visibility/levels, target disappearance and replacement, permission denial and per-setter checks, deferred deletion, pause/resume, duplicate identities, pooled reuse/hook bounds, allocation/work limits, read-free diagnostics, and partial creation denial/errors without allocation escape. Deliberately injected errors are checked and consumed only by their owning test.
+
+The opt-in `/fcu test` now includes independent panel creation, status-bar-bound attachment, container visibility, explicit dimensions and pause retirement. It retains/reuses the fixture controller and engine across runs, continues pending retirement after cancellation, and exposes skips/denials in its copyable report. Its orchestration passes offline; this is **not an executed native run**.
+
+Still required in client: actual editor layout and text readability, media decoding, full health-bar bounds while its fill changes, the plain quest-window background with working controls, independent action-bar backdrops, behind ordering with overlapping frames, DPI/UI scale, clipping boundaries, alpha behaviour, late loading, reload migration, combat/secret transitions, taint and cleanup under restricted access. Panels do not inherit target alpha or clipping. Visibility uses bounded 0.2s-minimum samples; layout/appearance checks use a 2s minimum, so transitions and contention can delay updates. Behind mode blocks at target level zero instead of guessing another strata. Source declarations and recorder success do not establish native rendering or safety.
+
+## Geometry policy — 2026-10-01
 
 **FrameCustomizer 0.3.0 / geometry-policy-1** is implemented and packaged. **89 offline scenarios pass: 30 core + 17 native-contract + 24 explorer/media/geometry regressions + 18 geometry-policy scenarios.** The old blanket management-denial assertions were intentionally replaced. Native/access/secret, identity, anchor representation, persistence, explorer, media and cosmetic enforcement regressions remain.
 

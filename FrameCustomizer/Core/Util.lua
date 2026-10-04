@@ -1,8 +1,8 @@
 local _, FC = ...
-FC.VERSION = "0.3.0"
-FC.REVISION = "geometry-policy-1"
+FC.VERSION = "0.4.0"
+FC.REVISION = "created-visuals-1"
 FC.BLANK_TEXTURE = "Interface\\AddOns\\FrameCustomizer\\Media\\Transparent.tga"
-FC.LIMITS = { rules = 128, depth = 12, minInterval = 0.25, maxInterval = 60,
+FC.LIMITS = { rules = 128, visuals = 64, depth = 12, minInterval = 0.25, maxInterval = 60,
     verify = 2, resolve = 3, jobs = 12, scan = 24, nodes = 6000, children = 256 }
 local U = {}
 FC.Util = U
@@ -55,6 +55,7 @@ function U.cleanLabel(s)
 end
 function U.joinTarget(t)
     if not t then return "unidentified" end
+    if t.visual then return "visual:"..t.visual.."/"..t.part end
     return t.root .. (#t.keys > 0 and ("." .. table.concat(t.keys, ".")) or "")
 end
 

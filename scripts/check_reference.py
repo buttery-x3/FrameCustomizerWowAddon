@@ -37,6 +37,16 @@ with ZipFile(args.zip) as archive:
     method("SimpleRegionAPIDocumentation", "GetAlpha", "SecretReturnsForAspect")
     method("SimpleRegionAPIDocumentation", "SetVertexColor", 'Name = "colorR"', 'Name = "a"')
     method("SimpleRegionAPIDocumentation", "GetEffectiveScale", "SecretAspect.Scale")
+    for name in ("SetFrameStrata", "SetFrameLevel", "SetFixedFrameStrata", "SetFixedFrameLevel", "Show", "Hide"):
+        method("SimpleFrameAPIDocumentation", name, "IsProtectedFunction = true")
+    method("SimpleFrameAPIDocumentation", "GetFrameLevel", "SecretReturnsForAspect", "SecretAspect.FrameLevel")
+    method("SimpleFrameAPIDocumentation", "GetFrameStrata", 'Type = "FrameStrata"')
+    method("SimpleFrameAPIDocumentation", "CreateTexture", 'SecretArguments = "NotAllowed"', 'Type = "SimpleTexture"')
+    method("SimpleScriptRegionAPIDocumentation", "EnableMouse", "IsProtectedFunction = true")
+    for file in ("SimpleFrameAPIDocumentation", "SimpleScriptRegionAPIDocumentation"):
+        method(file, "IsVisible", "SecretReturnsForAspect", "SecretAspect.Shown")
+    method("SimpleRegionAPIDocumentation", "SetDrawLayer", 'Name = "sublevel"', 'Default = 0')
+    method("SimpleRegionAPIDocumentation", "GetDrawLayer", 'Name = "sublayer"')
     method("SimpleTextureBaseAPIDocumentation", "SetTexture", 'Name = "textureAsset"', 'Name = "success"')
     method("SimpleTextureBaseAPIDocumentation", "SetAtlas", 'Name = "useAtlasSize"', 'Default = false')
     method("SimpleTextureBaseAPIDocumentation", "SetColorTexture", "ForbiddenAspect.SetTexture")
