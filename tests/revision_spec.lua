@@ -121,7 +121,7 @@ test("media picker displays sources, searches paths, resets atlas kind and saves
     local ui=FC.Editor; ui:select(t); ui:createRule(); ui:chooseProperty(P.byID.texture)
     ui.fields[1].edit:SetText("atlas"); ui:media(ui.fields[2])
     local picker=ui.listFrame; assert(picker.summary:GetText():find("detected",1,true))
-    picker.source.scripts.OnClick(); assert(picker.sourceIndex==2)
+    picker.source.scripts.OnClick(picker.source); FC.UIKit.choose(picker.source,2); assert(picker.sourceIndex==2)
     picker.search:SetText("Friendly background"); assert(picker.rows[1].item.source=="SharedMedia")
     picker.rows[1].scripts.OnClick(picker.rows[1]); assert(ui.fields[1].edit:GetText()=="file")
     assert(ui.fields[2].edit:GetText()==paths.background and ui.fields[2].label:GetText():find("SharedMedia",1,true))

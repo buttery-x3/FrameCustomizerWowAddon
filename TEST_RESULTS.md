@@ -1,5 +1,26 @@
 # Test results
 
+## Window management and usability — 2026-10-04
+
+**FrameCustomizer 0.5.0 / managed-editor-windows** responds to the client report of secondary window controls overlapping the main editor and remaining immovable. All six reusable interactive tool windows now share title dragging, Close, clamping and automatic focus/stacking. Each window's registered controls occupy a separate DIALOG frame-level band; dropdowns use a reused FULLSCREEN_DIALOG layer. Bordered sections and controls, readable grouping, finite-choice dropdowns, checkbox label hit areas, list paging and picker hide/restore replace the draft interface. Created visuals and existing-object property semantics retain schema 2 compatibility.
+
+| Validation | Result |
+| --- | --- |
+| `scripts/check.py` | PASS: 125 offline scenarios: 30 core, 17 native-contract, 24 regression, 18 geometry-policy, 25 visual and 11 new editor UI scenarios. Fifteen shipped Lua modules compile in Lua 5.1. |
+| Source ZIP audit | PASS: 98 declaration/shared-source contracts against the original build 70124 ZIP; SHA-256 unchanged. |
+| Layout review | Actual Lua constructors recorded at 1920x1080 and 1280x720; approximate previews inspected for main editor, fixed/fill visual forms, dropdown, media/visual lists and report stacking. Preview iteration corrected explicit text bounds and report scroll-child anchoring. Uses Segoe UI in place of the game font, with simplified layout/draw ordering; not a native screenshot or renderer. |
+| `scripts/test-deploy.ps1` | PASS: 18-file deployment, WhatIf, backup update, unrelated-addon/account preservation and all config cases. Fixtures only under `.tools/deployment-test-08fe11d4ad374d1b8ac19cf28dbcba1c` and ignored backups. |
+| `scripts/package.py` | PASS: final 125-scenario suite, manifest, archive integrity and every member compared with source; 18 allowlisted files. |
+| `git diff --check` | PASS. |
+
+Package: `dist/FrameCustomizer-0.5.0.zip`, 59,202 bytes. SHA-256: `fcecc9d906e3b36e241138636b348cbd3f077cc30c5f4f1204a15fd6244675ff`, also recorded in the adjacent `.sha256` file.
+
+New tests cover the common chrome on all six windows, child levels staying below the next window, promotion through nested controls, stable allocation/levels after repeated focus, per-primitive native denial and retry, adopted template descendants retaining their scripts, inaccessible/forbidden script bindings, dropdown click/keyboard/outside/owner lifecycle, hidden-window restoration after picking, fixed/fill draft preservation, property dropdown persistence, and distinct list filtering/paging. Existing visual and geometry regressions remain; only previous cycle-button tests were adapted to explicit dropdown selection.
+
+Local review previews are under ignored `dist/ui-preview/1920x1080/` and `dist/ui-preview/1280x720/`. They are excluded from the addon package and Git. The recorder gained explicit GetScript, texture-layer recording and parent-composed scale support; none establishes native security, layout or rendering behaviour.
+
+**Still required in the supplied client:** actual overlapping-window draw order including the report's scroll-template children; focus/keyboard propagation, outside-click consumption, tooltip placement, report scrolling/clipping, title dragging, resizing, clamping, UI scale/font readability and combat/taint transitions. No game installation or account data was modified. **Fully restart for 0.5.0**, which adds `UI/Widgets.lua` to the TOC; `/reload` alone is not the upgrade instruction.
+
 ## Visual editor and layer fixes — 2026-10-04
 
 **FrameCustomizer 0.4.1 / visual-editor-layer-fix** addresses the user's initial 0.4.0 client report: the visual editor could not be moved, strata appeared ineffective, and the dismissal button said Cancel. The editor now has a clamped title-bar drag region, retains session placement across Save/reopen, and uses **Close**. Editing strata or frame level selects manual layering so behind mode cannot silently replace those edits.

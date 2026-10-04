@@ -69,7 +69,7 @@ function M:GetPoint(i) return unpack(self.points[i or 1] or {}) end
 function M:SetAllPoints(o) self.points={{"TOPLEFT",o or self.parent,"TOPLEFT",0,0},{"BOTTOMRIGHT",o or self.parent,"BOTTOMRIGHT",0,0}} end
 function M:GetRect() return 100,100,self.width,self.height end
 function M:SetScale(s) self.scale=s end
-function M:GetEffectiveScale() return self.scale end
+function M:GetEffectiveScale() return self.scale*(self.parent and self.parent:GetEffectiveScale() or 1) end
 function M:IsAnchoringRestricted() return self.anchorRestricted==true end
 function M:IsAnchoringSecret() return self.anchorSecret==true end
 function M:IsUserPlaced() return self.userPlaced==true end
@@ -86,6 +86,7 @@ function M:GetNumRegions() return #self.regions end
 function M:GetChildren() return unpack(self.children) end
 function M:GetRegions() return unpack(self.regions) end
 function M:SetScript(name,f) assert(type(f)=="function" or f==nil); self.scripts[name]=f end
+function M:GetScript(name) return self.scripts[name] end
 function M:RegisterEvent(name) self.events[name]=true end
 function M:Show() self.shown=true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
 function M:Hide() self.shown=false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
@@ -147,7 +148,7 @@ function CreateFrame(kind,name,parent,template)
     assert(template==nil or template=="UIPanelScrollFrameTemplate","Unknown fake template")
     return object(kind,name,parent)
 end
-function M:CreateTexture(name,layer) assert(type(layer)=="string"); return object("Texture",name,self) end
+function M:CreateTexture(name,layer) assert(type(layer)=="string"); local t=object("Texture",name,self); t.layer=layer; return t end
 function M:CreateFontString(name,layer) assert(type(layer)=="string"); return object("FontString",name,self) end
 function hooksecurefunc(o,key,callback)
     assert(type(o[key])=="function","Missing method in posthook")

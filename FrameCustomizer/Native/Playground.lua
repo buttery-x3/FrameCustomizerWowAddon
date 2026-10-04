@@ -21,7 +21,14 @@ local function fixtures(name)
 end
 function PG:show()
     if InCombatLockdown() then FC.Print("Open playground outside combat."); return end
-    if not self.dev then self.dev=fixtures("FrameCustomizerPlayground"); FC.adapter.fixtures[self.dev.root]=true end
+    if not self.dev then
+        self.dev=fixtures("FrameCustomizerPlayground"); FC.adapter.fixtures[self.dev.root]=true
+        -- The interactive playground gets window chrome; isolated test
+        -- fixtures retain their exact test geometry and property baselines.
+        self.dev.root:SetSize(320,252); self.dev.art:ClearAllPoints(); self.dev.art:SetPoint("TOP",self.dev.root,"TOP",0,-66)
+        FC.UIKit.decorate(self.dev.root,"Playground",true)
+        FC.UIKit.border(self.dev.art.Control)
+    end
     self.dev.root:Show(); FC.Editor:build(); FC.Editor.frame:Show(); FC.Editor.opened=true
     FC.Editor.saved=false; FC.Editor.search:SetText("")
     FC.discovery:reveal(self.dev.root); FC.Editor:select(self.dev.root)

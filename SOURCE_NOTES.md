@@ -36,6 +36,14 @@ Public secondary reference: [maintainer's LibSharedMedia-3.0 API documentation](
 
 The source audit script checks these declarations as text. Existence of declarations is **not** a claim of unrestricted native access. Live permission guards and the outstanding client acceptance checks are required.
 
+## Tool-window stacking and controls (0.5.0)
+
+The audit now checks **98 contracts** against the same supplied ZIP and fingerprint. New declarations used by the shared UI toolkit are `SimpleScriptRegionAPIDocumentation.GetScript` (supported script, ScriptBindings restriction, potentially inaccessible function reference), `SetScript` (assignable script, ScriptBindings restriction), `SimpleFrameAPIDocumentation.SetPropagateKeyboardInput` (HasRestrictions), and `SimpleEditBoxAPIDocumentation.SetJustifyV` (JustifyVertical). Existing audited movement, clamping, fixed strata/level, hierarchy enumeration and scroll-template contracts remain in force.
+
+The earlier Blizzard talent-frame unlock/set/relock example supports the toolkit's fixed-level sequencing on its own controls. Separate 128-level window bands, four-level child spacing and the DIALOG/FULLSCREEN_DIALOG/TOOLTIP arrangement are explicit editor policies, not claims of native numeric limits. Only the addon-created report template's descendants are adopted for stacking through guarded hierarchy reads; inaccessible/deeper descendants remain a native-testing limit. No selected game object receives editor flags or script wrappers. The interactive playground is an addon-owned, editable fixture; separate test fixtures keep their original setup.
+
+Source declarations and substitute-font layout previews do not prove C++ frame-level propagation, event ordering, scrollbar clipping, input focus, actual font readability or combat/taint safety. Test overlapping main/visual/list/report windows, all child controls, dropdown dismissal and keyboard input, picker restoration, dragging, resizing and screen clamping in the supplied client. Tool-window state is session-only and does not alter the visual schema or native geometry policy.
+
 ## Visual editor and fixed-layer correction (0.4.1)
 
 The audit checks **94 contracts** against the same supplied ZIP and fingerprint. It adds Boolean `HasFixedFrameStrata`/`HasFixedFrameLevel` declarations, `SetMovable`, protected `StopMovingOrSizing` and `SetClampedToScreen`, and the exact fixed-level setter ordering below. The existing `StartMoving` protected declaration remains audited.
