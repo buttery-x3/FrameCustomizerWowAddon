@@ -14,6 +14,7 @@
 | `Native/Adapter.lua` | WoW permissions, explicit read/write methods, assets and safe inspection |
 | `Native/Visuals.lua` | Guarded UIParent hosts, native attachment plans, visibility, owned layout and relative ordering |
 | `Native/Discovery.lua` | Lazy hierarchy, bounded search exploration and reference processing |
+| `UI/Widgets.lua` | Shared bordered controls, finite-choice dropdowns, guarded movement and bounded tool-window stacking |
 | `UI/Editor.lua` | Reusable hierarchy rows, inspector, picker, assets and copyable reports |
 | `UI/VisualEditor.lua` | Shared independent/contextual creation form and all/attached visual management |
 | `Native/Playground.lua` | Opt-in editable fixtures and isolated native scenario engine |
@@ -109,3 +110,15 @@ Schema 1 migrates to a new schema 2 copy; existing validated rules and pause/ena
 The native fixture suite reuses its visual controller, pool and engine across runs, exercises independent/attached creation, fixed/fill sizing, visibility and pause, and continues pending retirement after cancellation. Native frame rendering, scale, clipping boundaries, behind ordering, cleanup restrictions and UI layout still need client testing; recorder assertions are not a renderer or security emulator.
 
 See [SOURCE_NOTES.md](SOURCE_NOTES.md) for the exact input fingerprint and source contracts, and [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks versus untested native behaviour.
+
+## Managed tool windows (0.5.0)
+
+The UI toolkit registers six reusable interactive window roots: main editor, visual editor, shared list, report, picker and interactive playground. Opening, clicking a control, or focusing an input promotes its root in a bounded ordering. Each root receives a 128-level band in DIALOG; registered child frames use depth-based offsets of four, with an explicit depth limit below 24. Strata/level setters temporarily unlock and restore fixed flags, rechecking native permission for each primitive. Denied layer changes retain a pending retry, serviced at most twice per second. Ordinary focus on an unchanged ordering does not rewrite native layer values. Header colour indicates the highest visible tool window.
+
+Controls created through the toolkit are registered immediately. The report's addon-instantiated scroll template is walked through the existing guarded child enumerator to include its frame descendants (bounded below depth 23); original mouse scripts are composed rather than replaced. No selected Blizzard hierarchy is walked or modified for tool-window stacking. Script composition checks access, ScriptBindings and returned function accessibility. The interactive playground is the sole explicit fixture window; isolated native test fixtures do not receive this chrome. Created presentation visuals retain their existing runtime registry and saved appearance layers.
+
+One reused dropdown has at most twelve option rows and a FULLSCREEN_DIALOG click catcher, above the DIALOG tool windows. It supports click selection, Up/Down/Enter, Escape, outside dismissal, and cleanup on owner hide, drag or another window's focus. An outside click dismisses and is consumed. Passive tooltips and selection outlines stay on TOOLTIP. This is editor presentation state, not saved-data state; no schema migration is added.
+
+All tool windows have title dragging, screen clamping and Close. Movement start/stop checks protected permission; pending stops retry through the shared driver, including while a window is hidden. Main-window resizing uses a minimum matching its authored layout and fits to available screen dimensions. Forms use bordered groups, explicit text bounds, full-label checkbox click areas and real dropdowns for finite values. Hidden fixed/fill inputs keep their draft values. Report content has an explicit scroll-child anchor and top text alignment. The picker hides/restores only the windows that were visible at entry.
+
+`tests/ui_spec.lua` covers movement/chrome, complete window bands, nested focus, bounded repeated opening, native denial recovery, template descendants, script-access refusal, menu lifecycle/keyboard input, picker restoration and existing saved-property semantics. Offline capture scripts in ignored `.tools/` produced layout previews in `dist/ui-preview/` at 1920x1080 and 1280x720, using the actual Lua constructors and a substitute font. They are review aids, not native screenshots or a proof of WoW clipping, font metrics, security or automatic frame-level behaviour. The TOC adds one module; validate packaging/deployment and require a full client restart for this upgrade.

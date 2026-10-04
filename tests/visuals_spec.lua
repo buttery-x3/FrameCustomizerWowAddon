@@ -254,7 +254,7 @@ test("visual editor drags by its title and preserves placement without saving dr
     f.protectedAllowed=true; f.drag.scripts.OnDragStart(); assert(f.moving and f.presentation.StartMoving)
     f.presentation.StopMovingOrSizing=nil; f.protectedAllowed=false; f.drag.scripts.OnDragStop()
     assert(f.stopPending and f.moving and not f.presentation.StopMovingOrSizing)
-    f.protectedAllowed=true; f.scripts.OnUpdate(f,0.05); assert(not f.moving and not f.stopPending)
+    f.protectedAllowed=true; FC.UIKit.tick(); assert(not f.moving and not f.stopPending)
     f.drag.scripts.OnDragStart()
     -- Native dragging supplies the new anchor; the recorder only verifies the
     -- handler wiring and that reopening/saving never re-centres the editor.
@@ -269,9 +269,9 @@ end)
 test("editing manual layer values changes the relationship while loading preserves behind mode",function()
     local target=frame("VisualLayerEditor"); UI:editVisual(nil,R.describe(FC.adapter,target)); local f=UI.visualFrame
     assert(f.fields.layerMode.value=="behind")
-    f.fields.strata.scripts.OnClick(f.fields.strata); assert(f.fields.layerMode.value=="manual")
+    f.fields.strata.scripts.OnClick(f.fields.strata); FC.UIKit.choose(f.fields.strata,"HIGH"); assert(f.fields.layerMode.value=="manual")
     UI:saveVisual(); local id=f.id; assert(FC.db.visuals[id].layerMode=="manual")
-    f.fields.layerMode.scripts.OnClick(f.fields.layerMode); assert(f.fields.layerMode.value=="behind")
+    f.fields.layerMode.scripts.OnClick(f.fields.layerMode); FC.UIKit.choose(f.fields.layerMode,"behind"); assert(f.fields.layerMode.value=="behind")
     UI:saveVisual(); assert(f.fields.layerMode.value=="behind" and FC.db.visuals[id].layerMode=="behind")
     f.fields.level:SetText("23"); f.fields.level.scripts.OnTextChanged(f.fields.level,true)
     assert(f.fields.layerMode.value=="manual"); UI:saveVisual(); N.advance(0.5)

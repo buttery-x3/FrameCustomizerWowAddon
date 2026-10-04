@@ -27,101 +27,78 @@ function UI:visualList(target)
         table.sort(items,function(a,b) return a[2]<b[2] end)
         return items,{summary=summary}
     end
-    self:showList(target and "Attached visuals" or "Your visuals",list(),function(item) self:editVisual(item[2]) end,summary,list)
-    self.listFrame.source:Hide()
+    self:showList(target and "Attached visuals" or "Your visuals",list(),function(item) self:editVisual(item[2]) end,summary,list,"visuals")
 end
 function UI:buildVisualControls()
-    self.yourVisuals=button(self.frame,"Your visuals",115,function() self:visualList() end); at(self.yourVisuals,self.frame,617,54)
-    self.addVisual=button(self.frame,"Add visual",108,function() self:editVisual() end); at(self.addVisual,self.frame,740,54)
-    self.addAttached=button(self.frame,"Add visual",108,function() self:editVisual(nil,self.target) end); at(self.addAttached,self.frame,802,184)
-    self.attachedVisuals=button(self.frame,"Attached visuals",135,function() self:visualList(self.target) end); at(self.attachedVisuals,self.frame,918,184)
+    self.yourVisuals=button(self.frame,"Your visuals",134,function() self:visualList() end); at(self.yourVisuals,self.frame,428,64)
+    self.addVisual=button(self.frame,"Add visual",108,function() self:editVisual() end); at(self.addVisual,self.frame,574,64)
+    self.addAttached=button(self.selectedPanel,"Add visual",110,function() self:editVisual(nil,self.target) end); at(self.addAttached,self.selectedPanel,459,112)
+    self.attachedVisuals=button(self.selectedPanel,"Attached visuals",186,function() self:visualList(self.target) end); at(self.attachedVisuals,self.selectedPanel,579,112)
 end
 function UI:buildVisualEditor()
     if self.visualFrame then return end
-    local f=CreateFrame("Frame",nil,UIParent); FC.adapter.owned[f]=true; self.visualFrame=f
-    f:SetSize(940,780); f:SetScale(math.min(1,(UIParent:GetWidth()-40)/940,(UIParent:GetHeight()-40)/780)); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG"); f:SetFrameLevel(100); f:EnableMouse(true)
-    f:SetMovable(true)
-    if FC.adapter:protected(f) then f:SetClampedToScreen(true) end
-    W.panel(f,0.075,0.095,0.13)
-    f.title=label(f,"",20); at(f.title,f,20,16); f.title:SetSize(790,32); f.title:SetWordWrap(false)
-    f.drag=CreateFrame("Frame",nil,f); FC.adapter.owned[f.drag]=true
-    f.drag:SetPoint("TOPLEFT"); f.drag:SetSize(815,48); f.drag:EnableMouse(true); f.drag:RegisterForDrag("LeftButton")
-    local function stopMoving()
-        f.stopPending=f.moving
-        if f.moving and FC.adapter:protected(f) then f:StopMovingOrSizing(); f.moving=nil; f.stopPending=nil end
+    local f=W.window("Add visual",1040,854); self.visualFrame=f; f.fields={}; f.fieldLabels={}
+    local identity=W.section(f,"Name and attachment",16,64,1008,204)
+    local appearance=W.section(f,"Appearance",16,284,320,402)
+    local geometry=W.section(f,"Size and placement",360,284,320,402)
+    local layers=W.section(f,"Layering",704,284,320,402)
+    local function field(key,title,p,x,y,width)
+        local t=label(p,title,11); at(t,p,x,y); t:SetSize(width or 292,16); f.fieldLabels[key]=t
+        local e=input(p,width or 292); at(e,p,x,y+18); f.fields[key]=e; return e
     end
-    f.drag:SetScript("OnDragStart",function()
-        if FC.adapter:protected(f) then f:StartMoving(); f.moving=true end
-    end)
-    f.drag:SetScript("OnDragStop",stopMoving); f:SetScript("OnHide",stopMoving); f:SetScript("OnShow",stopMoving)
-    f.close=button(f,"Close",85,function() f:Hide() end); at(f.close,f,830,12)
-    local function field(key,title,x,y,width)
-        local t=label(f,title,11); at(t,f,x,y); t:SetWidth(width or 275)
-        local e=input(f,width or 275); at(e,f,x,y+17); f.fields[key]=e; return e
+    local function choice(key,title,values,p,x,y,width,changed)
+        local t=label(p,title,11); at(t,p,x,y); t:SetSize(width or 292,16); f.fieldLabels[key]=t
+        local b=W.dropdown(p,width or 292,values,changed); at(b,p,x,y+18); f.fields[key]=b; return b
     end
-    local function choice(key,title,values,x,y)
-        local t=label(f,title,11); at(t,f,x,y)
-        local b=button(f,"",275,function(s)
-            local index=1; for i,v in ipairs(values) do if v==s.value then index=i%#values+1 end end
-            s.value=values[index]; s.text:SetText(s.value)
-            if s.changed then s.changed() end
-        end); at(b,f,x,y+17); f.fields[key]=b; b.options=values; return b
-    end
-    f.fields={}
-    field("name","Name",20,57,570)
-    f.enabled=check(f,"Visual enabled",function() end); at(f.enabled,f,620,78)
-    field("target","Placement: blank = screen; otherwise exact target path",20,108,680)
-    f.useSelected=button(f,"Use selected",195,function()
-        if UI.target and not UI.target.visual then
-            f.fields.target:SetText(path(UI.target)); f.draft.target=U.copy(UI.target)
-        else f.status:SetText("Select an existing object in the main editor first.") end
-    end); at(f.useSelected,f,718,125)
-    field("container","Visibility container: blank = target frame or target region's parent",20,159,680)
-    f.screen=button(f,"Independent on screen",195,function()
-        f.fields.target:SetText(""); f.fields.container:SetText(""); f.fields.mode.value="fixed"; f.fields.mode.text:SetText("fixed")
-        f.fields.layerMode.value="manual"; f.fields.layerMode.text:SetText("manual")
-    end); at(f.screen,f,718,176)
-    choice("kind","Appearance",{"solid","file","atlas"},20,213)
-    field("asset","Texture file path or atlas name",20,262)
-    f.media=button(f,"Browse media",130,function()
+    field("name","Name",identity,14,38,714)
+    f.enabled=check(identity,"Visual enabled",function() end); at(f.enabled,identity,754,60)
+    field("target","Target path - leave blank for an independent screen panel",identity,14,91,714)
+    f.useSelected=button(identity,"Use selected object",240,function()
+        if UI.target and not UI.target.visual then f.fields.target:SetText(path(UI.target)); f.draft.target=U.copy(UI.target)
+        else f.notice="Select an existing object in the main editor first."; f.status:SetText(f.notice) end
+    end); at(f.useSelected,identity,754,109)
+    field("container","Visibility container - blank follows the target's containing frame",identity,14,144,714)
+    f.screen=button(identity,"Independent on screen",240,function()
+        f.fields.target:SetText(""); f.fields.container:SetText(""); W.setChoice(f.fields.mode,"fixed"); W.setChoice(f.fields.layerMode,"manual"); self:visualFieldVisibility()
+    end); at(f.screen,identity,754,162)
+    choice("kind","Appearance",{{"solid","Solid colour"},{"file","Texture file"},{"atlas","Atlas"}},appearance,14,40,nil,function() self:visualFieldVisibility() end)
+    field("asset","Texture file path or atlas name",appearance,14,98)
+    f.media=button(appearance,"Browse media",292,function()
         local list,info=FC.adapter:media("texture")
         self:showList("Choose visual texture",list,function(item)
-            f.fields.asset:SetText(item[2]); f.fields.kind.value="file"; f.fields.kind.text:SetText("file")
+            f.fields.asset:SetText(item[2]); W.setChoice(f.fields.kind,"file"); self:visualFieldVisibility()
         end,info.summary,function() return FC.adapter:media("texture") end)
-        self.listFrame:SetFrameLevel(120)
-    end); at(f.media,f,20,310)
-    for i,pair in ipairs({{"r","Red (0..1)"},{"g","Green (0..1)"},{"b","Blue (0..1)"},{"a","Opacity (0..1)"}}) do field(pair[1],pair[2],20,345+(i-1)*49) end
-    choice("mode","Sizing",{"fixed","fill"},325,213)
-    field("width","Width (fixed sizing)",325,262); field("height","Height (fixed sizing)",325,311)
-    local points={"CENTER","TOPLEFT","TOP","TOPRIGHT","LEFT","RIGHT","BOTTOMLEFT","BOTTOM","BOTTOMRIGHT"}
-    choice("point","Visual anchor (fixed sizing)",points,325,360); choice("relativePoint","Target anchor (fixed sizing)",points,325,409)
-    field("x","X offset",325,458); field("y","Y offset",325,507)
-    choice("layerMode","Layer relationship",{"manual","behind"},630,213)
-    local function manualLayers()
-        f.fields.layerMode.value="manual"; f.fields.layerMode.text:SetText("manual")
+    end); at(f.media,appearance,14,156)
+    for i,pair in ipairs({{"r","Red (0..1)"},{"g","Green (0..1)"},{"b","Blue (0..1)"},{"a","Opacity (0..1)"}}) do
+        field(pair[1],pair[2],appearance,14+(i-1)%2*152,206+math.floor((i-1)/2)*58,140)
     end
-    choice("strata","Frame strata (switches to manual)",{"BACKGROUND","LOW","MEDIUM","HIGH","DIALOG","FULLSCREEN","FULLSCREEN_DIALOG","TOOLTIP"},630,262).changed=manualLayers
-    field("level","Frame level (manual, 0..10000)",630,311):SetScript("OnTextChanged",function(_,userInput)
-        if userInput then manualLayers() end
-    end)
-    choice("layer","Texture draw layer",{"BACKGROUND","BORDER","ARTWORK","OVERLAY","HIGHLIGHT"},630,360)
-    field("sublevel","Texture sublevel (-8..7)",630,409)
-    for i,key in ipairs({"left","right","top","bottom"}) do field(key,"Fill padding: "..key.." (negative expands)",630,458+(i-1)*49) end
-    f.hint=label(f,"Drag the title bar to move this editor. Changes apply on Save.\nFill follows target bounds; fixed sizing follows the anchor. Panels stay click-through.\nBehind follows the target frame's strata and level minus one.\nEditing strata or level switches to manual layering; Save applies the change.",11)
-    at(f.hint,f,20,572); f.hint:SetSize(590,76)
-    f.status=label(f,"",12); at(f.status,f,20,660); f.status:SetSize(895,42)
-    f.save=button(f,"Create",115,function() self:saveVisual() end); at(f.save,f,20,720)
-    f.duplicate=button(f,"Duplicate",115,function()
+    f.appearanceHint=label(appearance,"Solid colour uses your tint and opacity. Choose Texture file or Atlas for an image.",11); at(f.appearanceHint,appearance,14,334); f.appearanceHint:SetSize(292,52)
+    choice("mode","Sizing",{{"fixed","Fixed dimensions"},{"fill","Fill target bounds"}},geometry,14,40,nil,function() self:visualFieldVisibility() end)
+    field("width","Width",geometry,14,98,140); field("height","Height",geometry,166,98,140)
+    choice("point","Visual anchor",W.points,geometry,14,148,140); choice("relativePoint","Target anchor",W.points,geometry,166,148,140)
+    field("x","X offset",geometry,14,206,140); field("y","Y offset",geometry,166,206,140)
+    f.fillHint=label(geometry,"Fill follows all target edges. Positive padding insets; negative padding expands.",11); at(f.fillHint,geometry,14,104); f.fillHint:SetSize(292,90)
+    for i,key in ipairs({"left","right","top","bottom"}) do field(key,"Padding: "..key,geometry,14+(i-1)%2*152,264+math.floor((i-1)/2)*58,140) end
+    local function manualLayers() W.setChoice(f.fields.layerMode,"manual") end
+    choice("layerMode","Layer relationship",{{"manual","Manual strata / level"},{"behind","Behind target"}},layers,14,40)
+    choice("strata","Frame strata - selects manual",W.strata,layers,14,98,nil,manualLayers)
+    field("level","Frame level (0..10000)",layers,14,156):SetScript("OnTextChanged",function(_,userInput) if userInput then manualLayers() end end)
+    choice("layer","Texture draw layer",W.layers,layers,14,214)
+    field("sublevel","Texture sublevel (-8..7)",layers,14,272)
+    local layerHint=label(layers,"Behind follows the target's strata and level minus one. Draw layer orders this panel's texture.",11); at(layerHint,layers,14,334); layerHint:SetSize(292,54)
+    f.hint=label(f,"Drag the title bar to move this window. Panels stay click-through and use screen UI units.\nSave applies changes. Close discards unsaved edits. Target clipping and alpha are not inherited.",11); at(f.hint,f,18,708); f.hint:SetSize(1000,36)
+    f.status=label(f,"",12); at(f.status,f,18,756); f.status:SetSize(1000,36)
+    f.save=button(f,"Create",130,function() self:saveVisual() end); at(f.save,f,894,808); W.tone(f.save,"primary")
+    f.duplicate=button(f,"Duplicate",120,function()
         if FC.readOnlyData then return end
         local id,why=FC.visuals:duplicate(f.id)
-        if id then FC.engine:sync(); self:editVisual(id) else f.status:SetText(why) end
-    end); at(f.duplicate,f,150,720)
-    f.delete=button(f,"Delete",115,function()
+        if id then FC.engine:sync(); self:editVisual(id) else f.notice=why; f.status:SetText(why) end
+    end); at(f.duplicate,f,16,808)
+    f.delete=button(f,"Delete",100,function()
         if FC.readOnlyData or not f.id then return end
-        FC.visuals:delete(f.id); FC.engine:sync(); FC.visuals:tick(); f:Hide(); self:message("Visual deleted. Any restricted cleanup remains pending; see Report.")
-    end); at(f.delete,f,280,720)
+        FC.visuals:delete(f.id); FC.engine:sync(); FC.visuals:tick(); f:Hide(); self:message("Visual deleted. Restricted cleanup remains pending until permitted; see Report.")
+    end); at(f.delete,f,148,808); W.tone(f.delete,"danger")
     f:SetScript("OnUpdate",function(_,dt)
-        if f.stopPending then stopMoving() end
         f.elapsed=(f.elapsed or 0)+dt
         if f.elapsed>=0.5 then
             f.elapsed=0
@@ -131,6 +108,14 @@ function UI:buildVisualEditor()
             end
         end
     end)
+end
+function UI:visualFieldVisibility()
+    local f=self.visualFrame; local fixed=f.fields.mode.value=="fixed"
+    for _,key in ipairs({"width","height","point","relativePoint"}) do W.show(f.fields[key],fixed); W.show(f.fieldLabels[key],fixed) end
+    for _,key in ipairs({"left","right","top","bottom"}) do W.show(f.fields[key],not fixed); W.show(f.fieldLabels[key],not fixed) end
+    W.show(f.fillHint,not fixed)
+    local asset=f.fields.kind.value~="solid"
+    W.show(f.fields.asset,asset); W.show(f.fieldLabels.asset,asset)
 end
 function UI:editVisual(id,target)
     self:buildVisualEditor()
@@ -143,11 +128,11 @@ function UI:editVisual(id,target)
     for key,value in pairs(v.layout) do values[key]=value end
     for _,part in ipairs({"tint","frameLayer","drawLayer"}) do for key,value in pairs(v.style[part]) do values[key]=value end end
     for key,e in pairs(f.fields) do
-        if e.options then e.value=values[key]; e.text:SetText(e.value) else e:SetText(tostring(values[key] or "")) end
+        if e.options then W.setChoice(e,values[key]) else e:SetText(tostring(values[key] or "")) end
     end
     f.enabled:SetChecked(v.enabled); f.save.text:SetText(id and "Save" or "Create")
     W.show(f.duplicate,id~=nil and not FC.readOnlyData); W.show(f.delete,id~=nil and not FC.readOnlyData); W.show(f.save,not FC.readOnlyData)
-    f.status:SetText("Changes apply on Save. Close leaves unsaved edits unapplied."); f:Show()
+    self:visualFieldVisibility(); f.status:SetText("Changes apply on Save. Close leaves unsaved edits unapplied."); f:Show(); W.focus(f)
 end
 function UI:saveVisual()
     if FC.readOnlyData then return end

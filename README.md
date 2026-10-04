@@ -1,8 +1,8 @@
-# FrameCustomizer 0.4.1
+# FrameCustomizer 0.5.0
 
 A frame-agnostic authoring tool for **existing Blizzard UI objects and addon-created presentation panels**, targeting the supplied WoW Forever beta snapshot: **1.60.1, build 70124, interface 16001**, dated September 29, 2026. It customises existing widgets without replacing their values, scripts, events or interactions.
 
-The installable build is `dist/FrameCustomizer-0.4.1.zip`. This fixes the immovable visual editor, changes its dismissal button to **Close**, and corrects how owned panels apply fixed strata/level settings. The user's initial 0.4.0 client test exposed editor movement and layering problems; **these fixes have been verified offline and still need client retesting.** See [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks and remaining client verification.
+The installable build is `dist/FrameCustomizer-0.5.0.zip`. The editor now uses shared movable windows, automatic stacking, bordered controls and dropdowns. This addresses dialog controls overlapping other windows and extends movement to the media/visual lists, reports, picker and playground. **Offline validation and approximate layout previews pass; native rendering and interaction still need client retesting.** See [TEST_RESULTS.md](TEST_RESULTS.md).
 
 ## Install and open
 
@@ -12,7 +12,7 @@ Extract the ZIP into the client's `Interface\AddOns` directory, producing:
 Interface\AddOns\FrameCustomizer\FrameCustomizer.toc
 ```
 
-There is exactly one addon folder in the ZIP. No external library is required. **Fully restart when upgrading from before 0.4.0**, which added three Lua modules. For an upgrade from 0.4.0 to 0.4.1, replace the files, use `/reload` and check `/fcu report`. The supplied slash implementation calls `ReloadUI()`; this does not establish TOC/file/asset cache behavior or automatic hot reload.
+There is exactly one addon folder in the ZIP. No external library is required. **Fully restart the client when upgrading to 0.5.0:** the TOC adds `UI/Widgets.lua`. Check `/fcu report` for version `0.5.0 / managed-editor-windows`. Later edits to already-listed Lua files can use `/reload`; automatic hot reload or TOC/file-cache refresh is not assumed.
 
 Enable FrameCustomizer in the AddOns list and enter the game:
 
@@ -31,9 +31,17 @@ Enable FrameCustomizer in the AddOns list and enter the game:
 
 This development pass packages the addon without deploying to the game folder. The Windows deployment script can remember your AddOns path in a Git-ignored `.env` file; see [DEVELOPMENT.md](DEVELOPMENT.md).
 
+## Editor windows and controls
+
+Drag any tool window by its title bar. Opening or clicking a window brings its entire contents forward; its background, buttons, fields and labels move together in the stacking order. The main editor, visual editor, media/visual lists, reports, picker and interactive playground share bordered headers, Close buttons and screen clamping. Positions last for the session. The main editor remains resizable, with a minimum layout size and automatic fitting to the screen. Passive tooltips and selection outlines follow their subjects; authored presentation panels keep their own saved layer settings and click-through behaviour.
+
+The main editor groups browsing, selection, properties and editing in separate sections. **Hierarchy / Saved entries** is a dropdown. Finite choices such as texture type, font flags, anchor points, strata, draw layer, media source and enforcement strategy use dropdowns instead of cycling buttons or free-text constants. Click an option, or use Up/Down then Enter. Escape or an outside click dismisses the menu without changing the value; an outside click is consumed by the menu. Checkboxes include their text in the click area.
+
+The visual form groups name/attachment, appearance, size/placement and layering. Fixed sizing shows dimensions/anchors; fill sizing shows padding, preserving hidden values when switching. Solid colour hides the asset-path input; Browse media can still select a texture. Lists provide search, Previous/Next and wheel scrolling, with labels appropriate to assets or visuals. The object picker temporarily hides the other tool windows and restores those that were open when selection finishes or is cancelled.
+
 ## Edit an object
 
-1. Expand `UIParent` or use **Pick**. Rows prominently show the parent key/local label and compact object type. A `?` beside the type means inspect-only; hover for the reason and full stable resolver path. **Copy path** opens selectable text. **Find path** accepts an exact global name followed by verified parent keys. The picker identifies mouse-focus frames; expand them to reach textures and FontStrings.
+1. Expand `UIParent` or use **Pick object**. Rows prominently show the parent key/local label and compact object type. A `?` beside the type means inspect-only; hover for the reason and full stable resolver path. **Copy path** opens selectable text. **Exact global path → Find** accepts a global name followed by verified parent keys. The picker identifies mouse-focus frames; expand them to reach textures and FontStrings.
 2. Search matches local labels, full paths and types. Results remain a pruned hierarchy containing matches and their ancestors. Relevant ancestors open automatically; collapse/expand applies only to the current query. Clearing search restores normal expansion state. **Scan search** feeds discoveries into the same tree. Undiscovered branches require expansion or scanning. **Refresh** clears search and rebuilds the snapshot. Scans do not force-load Blizzard addons.
 3. Selection is inspection only, with a row highlight and automatic scrolling into view. The independent outline uses accessible screen coordinates; it does not alter or anchor to the target. Anonymous objects without verified persistent identity remain read-only.
 4. Click **Create customisation**, choose a property, edit values, then **Enable this property override** or **Commit value**. Only enabled properties are enforced. Permitted cosmetic constants can work without a readable baseline. Position needs readable anchors to preserve their relationships.
@@ -112,7 +120,7 @@ No arbitrary scripts, gameplay triggers, replacement gameplay UI, logical Blizza
 
 Discovery is capped at 6000 objects, 16 reference inspections per slice, and 256 children/regions per ordinary object (4096 for the initial UI root). Closed branches are lazy. Inaccessible, huge or detached hierarchies may need Pick or an exact path. Search is not an exhaustive global scan. Native secrets, taint, template layout, fonts/assets, scale, combat transitions and rendering need client verification.
 
-1. Install 0.4.1 and check `/fcu report`; restart fully if upgrading from before 0.4.0. Run `/fcu test` outside combat and copy PASS/FAIL/SKIPPED results, including independent/attached panels, visibility, fixed dimensions and pause retirement. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
+1. Install 0.5.0, fully restart, and check `/fcu report`. Open the main editor, visual form, texture picker, visual list and report together. Bring each forward using a visible control, drag it, close/reopen it, and check that lower windows' text/buttons never show through its background. Exercise dropdown click/keyboard/dismissal, report scrolling, narrow screens/UI scale, and picker cancellation/restoration. Run `/fcu test` outside combat and retain PASS/FAIL/SKIPPED results. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
 2. Browse a deep real hierarchy: check local labels/types, tooltip/copy path, highlight and scrolling. Search a name, full path and type; collapse an ancestor, scan, then clear search and verify previous expansion state returns.
 3. Open `/fcu playground`, expand **Art**, and use the editor: **Decoration** → Texture → Transparent / blank; **Bar** → Status bar texture; **Label** → Font. With a provider loaded, choose SharedMedia assets by name and inspect rendering. Check bar values/buttons. Restart with all LSM providers disabled and verify built-ins/manual entry still work. `/fcu test` also exercises an explicit built-ins-only fallback without changing installed libraries.
 4. Use **SiblingAnchor** and **TwoAnchors**: inspect Anchor details, change X/Y, verify relationships/spacing, enforcement, undo and reload persistence. Use an affected real panel: inspect Eligibility report, enable a permitted edit, then reopen/refresh it. Compare normal enforcement and optional periodic mode, then confirm pause + reload recovery. Check that the selected system's exposed Edit Mode position uses Edit Mode, while an eligible descendant can edit its local geometry. Multi-anchor size must remain unsupported even with an advisory. QuestFrame, WorldMapFrame and PlayerFrame are manual examples only; eligibility is never keyed by these names.

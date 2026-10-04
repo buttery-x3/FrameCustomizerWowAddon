@@ -79,6 +79,10 @@ with ZipFile(args.zip) as archive:
     for name in ("StopMovingOrSizing", "SetClampedToScreen"):
         method("SimpleFrameAPIDocumentation", name, "IsProtectedFunction = true")
     method("SimpleFrameAPIDocumentation", "SetMovable", 'Name = "movable"')
+    method("SimpleScriptRegionAPIDocumentation", "GetScript", "RequiresSupportedScript = true", "ForbiddenAspect.ScriptBindings")
+    method("SimpleScriptRegionAPIDocumentation", "SetScript", "RequiresAssignableScript = true", "ForbiddenAspect.ScriptBindings")
+    method("SimpleFrameAPIDocumentation", "SetPropagateKeyboardInput", "HasRestrictions = true")
+    method("SimpleEditBoxAPIDocumentation", "SetJustifyV", 'Type = "JustifyVertical"')
     # Owned visual layer writes follow the exact unlock / set / lock order.
     talent = source("Blizzard_SharedTalentUI/Blizzard_SharedTalentFrame.lua")
     start = talent.index("function TalentFrameBaseMixin:SetElementFrameLevel(")

@@ -2,7 +2,7 @@
 ## Title: FrameCustomizer
 ## Notes: Customise existing UI objects and create independent or attached visuals.
 ## Author: FrameCustomizer contributors
-## Version: 0.4.1
+## Version: 0.5.0
 ## SavedVariables: FrameCustomizerDB, FrameCustomizerSafeMode
 ## OptionalDeps: LibSharedMedia-3.0, SharedMedia
 ## X-FrameCustomizer-Assets: Media/Transparent.tga
@@ -16,6 +16,7 @@ Core/Engine.lua
 Native/Adapter.lua
 Native/Visuals.lua
 Native/Discovery.lua
+UI/Widgets.lua
 UI/Editor.lua
 UI/VisualEditor.lua
 Native/Playground.lua
