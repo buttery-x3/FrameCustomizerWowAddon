@@ -1,8 +1,8 @@
-# FrameCustomizer 0.3.0
+# FrameCustomizer 0.4.0
 
-A frame-agnostic authoring tool for **existing Blizzard UI objects**, targeting the supplied WoW Forever beta snapshot: **1.60.1, build 70124, interface 16001**, dated September 29, 2026. It customises existing widgets without replacing their values, scripts, events or interactions.
+A frame-agnostic authoring tool for **existing Blizzard UI objects and addon-created presentation panels**, targeting the supplied WoW Forever beta snapshot: **1.60.1, build 70124, interface 16001**, dated September 29, 2026. It customises existing widgets without replacing their values, scripts, events or interactions.
 
-The installable build is `dist/FrameCustomizer-0.3.0.zip`. The user reported successful 0.1.0 loading, discovery, cosmetic opacity through combat/reload, pause-and-reload recovery and resume. **The changes in 0.2.0 and 0.3.0 have been verified offline only.** See [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks and remaining client verification.
+The installable build is `dist/FrameCustomizer-0.4.0.zip`. The user previously reported working discovery and edits in the client. **The new 0.4.0 creation, attachment, layer controls and editor have been verified offline only.** See [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks and remaining client verification.
 
 ## Install and open
 
@@ -12,7 +12,7 @@ Extract the ZIP into the client's `Interface\AddOns` directory, producing:
 Interface\AddOns\FrameCustomizer\FrameCustomizer.toc
 ```
 
-There is exactly one addon folder in the ZIP. No external library is required. **Fully restart when upgrading from 0.1.0**, because 0.2.0 added a Lua module and a texture asset. For subsequent edits to already-listed Lua files, use `/reload` and check `/fcu report`. The supplied slash implementation calls `ReloadUI()`; this does not establish TOC/file/asset cache behavior or automatic hot reload.
+There is exactly one addon folder in the ZIP. No external library is required. **Fully restart when upgrading to 0.4.0**, which adds three Lua modules. For subsequent edits to already-listed Lua files, use `/reload` and check `/fcu report`. The supplied slash implementation calls `ReloadUI()`; this does not establish TOC/file/asset cache behavior or automatic hot reload.
 
 Enable FrameCustomizer in the AddOns list and enter the game:
 
@@ -26,7 +26,7 @@ Enable FrameCustomizer in the AddOns list and enter the game:
 | `/fcu playground` | Show editable addon-owned fixtures |
 | `/fcu playground reset` | Reset fixture cosmetics through ordinary setters |
 | `/fcu playground hide` | Hide the development playground |
-| `/fcu test` | Run opt-in native fixture scenarios outside combat (~27 seconds) |
+| `/fcu test` | Run opt-in native fixture scenarios outside combat (~30 seconds) |
 | `/fcu test stop` | Cancel and clean up the fixture test |
 
 This development pass packages the addon without deploying to the game folder. The Windows deployment script can remember your AddOns path in a Git-ignored `.env` file; see [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -47,6 +47,8 @@ Opacity and colour components use `0..1`. Opacity zero is visual suppression: it
 - File texture/atlas replacement and RGBA tint. Atlas replacement does not adopt atlas size; file replacement preserves existing UV coordinates, which can crop an image.
 - Font face, size, flags and colour on individual FontStrings. Shared Font objects are never mutated. Embedded text colour codes may take precedence.
 - Status-bar fill texture and colour. The existing fill region is used; bar values, ranges, scripts and events remain unchanged by these properties.
+- Frame strata and level on supported frame types, subject to native protected-operation checks. Level reads respect the FrameLevel secret aspect; permitted constant writes do not require a readable baseline.
+- Draw layer and sublevel on textures and FontStrings. These order regions within their containing frame, not across the entire UI.
 - Size on objects with zero or one existing anchor, after native, representation and property-specific Edit Mode checks. Multiple anchors can constrain dimensions, so size on those layouts is explicitly unsupported.
 - Position using a single parent anchor or **1..8 preserved anchors**, including sibling/other stable relatives. X/Y are the primary anchor's absolute offsets in UI units; editing them translates all anchors and preserves spacing, point names and relative objects. The primary anchor is the first point alphabetically. A sole parent anchor retains the original editable point/relative-point behavior. **Anchor details** shows readable current and configured relationships.
 
@@ -76,24 +78,43 @@ The picker displays friendly names but saves the resolved file path. Commit appl
 
 **Transparent / blank** is an addon-owned 8x8, 32-bit uncompressed TGA with zero alpha in every pixel, shipped as `FrameCustomizer/Media/Transparent.tga` under the addon MIT licence. Packaging and deployment include it through TOC asset metadata; tests validate its header, pixels and copies. It can suppress artwork when alpha/tint is modulated, but later texture/atlas resets still need enforcement. Native loading/rendering of this new asset remains a client check.
 
+## Create independent and attached visuals
+
+The top toolbar **Add visual** opens the creation form with screen placement and fixed dimensions. **Add visual** beside a selected stable object opens the same form with that attachment, fill sizing and behind-target ordering. No override rule on the selected object is required. **Cancel** leaves saved settings unchanged; **Create/Save** validates and commits them. The editor remains usable when an existing saved attachment is temporarily unavailable.
+
+- **Appearance:** solid colour, file texture or atlas, RGBA colour, and the existing searchable media picker. Solid colour uses the built-in white texture and the normal tint property. Atlas size is not adopted.
+- **Placement:** blank target means screen placement. Enter an exact verified target path or choose **Use selected**. **Independent on screen** changes placement to the screen, fixed sizing and manual layering. The identity and other settings survive changing placement.
+- **Sizing:** fixed width/height with independent anchor points and X/Y offsets; or fill the target with four padding values and X/Y translation. Positive padding insets, negative padding expands. Width/height apply only in fixed mode. Inputs use UIParent's UI units. Native anchors follow the target's bounds; scale behaviour needs client inspection.
+- **Visibility:** independent panels follow UIParent. Attachments follow the target frame, or the containing frame for a selected Texture/FontString. An optional exact frame path chooses a separate visibility container. Zero alpha is not treated as logical hiding.
+- **Layering:** manual strata/level, or **behind**, which uses the target's containing frame's readable strata and one lower frame level. A level of zero, unavailable layer data or unsupported strata explicitly blocks behind mode; select manual layering to author a different arrangement. Texture draw layer/sublevel remain independently editable. Supported representation: eight named strata, levels 0..10000, five draw layers and sublevels -8..7.
+
+**Your visuals** lists all saved panels. **Attached visuals** lists those associated with the selected target. Select one to rename, duplicate, change attachment, enable/disable or delete it. Duplicate creates a new identity. Disabled and unresolved entries stay accessible. Panels remain click-through; use the editor list or hierarchy to select them.
+
+Each panel is a plain addon-owned frame parented to UIParent with one texture. Neither the host nor texture is inserted into the target's native hierarchy. Consequently panels do **not inherit target alpha or clipping**, including scrolling clips. This makes them suitable for backgrounds around window/container bounds; it does not promise clipped decoration inside scrolling content. Behind mode orders relative to the containing frame, not individual regions or all overlapping windows. Native rendering must verify the player health-bar and quest-window examples.
+
+Visibility and attachment readiness are sampled at a minimum 0.2-second cadence; layout/appearance verification runs at a minimum two-second cadence. Changes to readable target layers schedule configuration on the next sample. Both use bounded work, so load can delay them and transitions may flicker. Native geometry, secret values and access checks still apply to our own objects and their relatives. Denial never enables a bypass.
+
+There are at most 64 saved visuals and 64 allocated hosts per controller/session, with hidden, detached objects reused after permitted retirement. Deleting or disabling a visual, or Pause All, removes its visible contribution when native access permits. Denied cleanup is reported as **pending removal** and retried, including while paused. No native object destruction is claimed. `/fcu pause`, then `/reload`, prevents recreation and completes recovery. Resume restores enabled definitions. No standalone scripts, gameplay triggers, grouping, static text or dedicated borders are provided in 0.4.0.
+
 ## Persistence, enforcement and recovery
 
-Rules use the existing version-1 account-wide SavedVariables table. The optional validated `position.anchors` extension leaves old four-field parent-position values and cosmetic rules intact; no destructive migration is needed. Only validated declarative values, strategies and pause state are saved, never live objects or session baselines. The independent `FrameCustomizerSafeMode` flag survives an unsupported database schema. Malformed properties/rules are rejected independently and reported; duplicate-target entries are paused. Unknown database versions are preserved and opened read-only.
+The account-wide SavedVariables table now uses **schema 2**. A validated copy migrates schema 1, preserving existing rule IDs, values, enable flags, intervals, anchor semantics and pause state. Separate visual definitions and monotonically advancing IDs are added; native objects and baselines are never saved. Unknown versions or malformed top-level tables preserve the original variable and start paused/read-only. Individual invalid entries are reported and skipped; duplicate existing-object targets are paused. The independent `FrameCustomizerSafeMode` flag survives unsupported data. Older releases recognise schema 2 as unsupported and preserve it read-only; they cannot edit it. Back up SavedVariables before deliberately downgrading.
 
 Normal enforcement uses permitted setter posthooks plus **2-second readable verification**. Optional periodic reapplication sends configured constants at **0.25–60 seconds**, including when cosmetic reads are unavailable. Geometry never bypasses current permission/representation checks. Lower intervals cost more. The shared work budget makes these minimum cadences, not guaranteed deadlines under load. Unresolved targets retry every three seconds, with earlier generic load/combat/restriction notifications. Hooks ignore obsolete/disabled rules. Three actual operation errors suspend a property with backoff; fix the cause and Apply Now to retry.
 
 Status distinguishes disabled, pending, unresolved/ambiguous, blocked, failed, matched at last readable check, and constant applied with inaccessible current value. A successful setter does not prove rendered appearance. Native changes, animations and cached method references can bypass hooks; verification/periodic writes may allow flicker.
 
-Pause All, disabling/deleting rules and disabling properties stop future enforcement and pending work. They do not restore Blizzard's current intended appearance. **Undo session** disables the entry and attempts to restore accessible per-property session values for the same object. It is approximate and may be blocked. For recovery: `/fcu pause`, then `/reload`; resume when ready. If the addon cannot load, disable FrameCustomizer in the AddOns list.
+For existing-object rules, Pause All, disabling/deleting rules and disabling properties stop future enforcement and pending work. They do not restore Blizzard's current intended appearance. Created visuals instead retire as described above. **Undo session** on an existing-object entry disables it and attempts to restore accessible per-property session values for the same object. It is approximate and may be blocked. For recovery: `/fcu pause`, then `/reload`; resume when ready. If the addon cannot load, disable FrameCustomizer in the AddOns list.
 
 ## Limits and client acceptance
 
-No arbitrary scripts, gameplay triggers, replacement UI, logical parent hiding, shared-font mutation, anonymous/pool fingerprints, child-index identities, or duplication of supported same-object Edit Mode controls. Only verified global names and actual parent-key chains persist. Rules identify widgets/slots, not the gameplay entity displayed. Changed identities are never replaced by guessed matches.
+No arbitrary scripts, gameplay triggers, replacement gameplay UI, logical Blizzard-parent hiding, shared-font mutation, anonymous/pool fingerprints, child-index identities, or duplication of supported same-object Edit Mode controls. Existing-object identities use verified global names and actual parent-key chains; created components use the explicit visual registry. Rules identify widgets/slots, not the gameplay entity displayed. Changed identities are never replaced by guessed matches.
 
 Discovery is capped at 6000 objects, 16 reference inspections per slice, and 256 children/regions per ordinary object (4096 for the initial UI root). Closed branches are lazy. Inaccessible, huge or detached hierarchies may need Pick or an exact path. Search is not an exhaustive global scan. Native secrets, taint, template layout, fonts/assets, scale, combat transitions and rendering need client verification.
 
-1. Install 0.3.0 (full restart when upgrading from 0.1.0); check `/fcu report`. Run `/fcu test` outside combat and copy PASS/FAIL/SKIPPED results. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
+1. Install 0.4.0 with a full restart; check `/fcu report`. Run `/fcu test` outside combat and copy PASS/FAIL/SKIPPED results, including independent/attached panels, visibility, fixed dimensions and pause retirement. These are addon-owned fixtures; successful calls do not certify rendered appearance or protected Blizzard behavior.
 2. Browse a deep real hierarchy: check local labels/types, tooltip/copy path, highlight and scrolling. Search a name, full path and type; collapse an ancestor, scan, then clear search and verify previous expansion state returns.
 3. Open `/fcu playground`, expand **Art**, and use the editor: **Decoration** → Texture → Transparent / blank; **Bar** → Status bar texture; **Label** → Font. With a provider loaded, choose SharedMedia assets by name and inspect rendering. Check bar values/buttons. Restart with all LSM providers disabled and verify built-ins/manual entry still work. `/fcu test` also exercises an explicit built-ins-only fallback without changing installed libraries.
 4. Use **SiblingAnchor** and **TwoAnchors**: inspect Anchor details, change X/Y, verify relationships/spacing, enforcement, undo and reload persistence. Use an affected real panel: inspect Eligibility report, enable a permitted edit, then reopen/refresh it. Compare normal enforcement and optional periodic mode, then confirm pause + reload recovery. Check that the selected system's exposed Edit Mode position uses Edit Mode, while an eligible descendant can edit its local geometry. Multi-anchor size must remain unsupported even with an advisory. QuestFrame, WorldMapFrame and PlayerFrame are manual examples only; eligibility is never keyed by these names.
 5. On unrelated Blizzard decorations, test refresh, periodic enforcement, late loading, reload persistence, disable/delete, Pause All + reload and Resume. Reconfirm combat transitions: denied geometry must produce no writes/action-blocked errors, while permitted cosmetics should retain the previously observed behavior. Copy `/fcu report` for affected entries.
+6. Select the full health StatusBar, then **Add visual**: confirm the background stays full length as health changes. Try a quest-window background and an independent panel behind several action bars. Check readable content, working buttons, movement, resize, reopen, UI scale, alpha, overlap and clipping limits. Verify both creation defaults, Cancel, media choice, rename, duplicate, screen/attachment changes, disable/delete, pause/resume and reload persistence. Test targets that load late and native combat/restriction transitions. Rendering, timing, editor layout and taint remain manual checks.

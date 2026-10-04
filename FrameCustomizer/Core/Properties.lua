@@ -98,6 +98,24 @@ add({id="position",label="Position / preserved anchors",types=visual,reads={"Get
     help="One parent anchor, or 1..8 preserved anchors to accessible stable relatives. X/Y translates all preserved anchors; their points, relatives and spacing stay fixed. Disable and reselect Position to recapture a changed layout.",
     default={point="CENTER",relativePoint="CENTER",x=0,y=0},inputs={{"point","Anchor point (preserved if multiple)"},{"relativePoint","Relative point"},{"x","X offset (-4096..4096)"},{"y","Y offset (-4096..4096)"}},
     validate=FC.Anchors.validate,read=FC.Anchors.read,write=FC.Anchors.write})
+P.strata={BACKGROUND=true,LOW=true,MEDIUM=true,HIGH=true,DIALOG=true,FULLSCREEN=true,FULLSCREEN_DIALOG=true,TOOLTIP=true}
+P.layers={BACKGROUND=true,BORDER=true,ARTWORK=true,OVERLAY=true,HIGHLIGHT=true}
+local frames={Frame=true,Button=true,CheckButton=true,StatusBar=true,ScrollFrame=true,EditBox=true,Slider=true}
+add({id="frameLayer",label="Frame strata and level",types=frames,permission="protected",
+    reads={"GetFrameStrata","GetFrameLevel"},writes={"SetFrameStrata","SetFrameLevel"},
+    signals={"SetFrameStrata","SetFrameLevel","SetFixedFrameStrata","SetFixedFrameLevel"},aspects={"FrameLevel"},
+    help="Strata plus level within that strata. Native protected-operation checks apply; readable levels can be secret.",
+    default={strata="MEDIUM",level=1},inputs={{"strata","Frame strata"},{"level","Frame level (0..10000)"}},
+    validate=function(v) return fields(v,{"strata","level"},{function(x) return U.string(x,24) and P.strata[x] end,function(x) return num(x,0,10000) and x%1==0 end}) end,
+    read=function(a,o) local ok,s=a:read(o,"GetFrameStrata"); local good,n=a:read(o,"GetFrameLevel"); if ok and good then return {strata=s,level=n} end end,
+    write=function(a,o,v) a:write(o,"SetFrameStrata",v.strata); a:write(o,"SetFrameLevel",v.level) end})
+add({id="drawLayer",label="Draw layer and sublevel",types={Texture=true,FontString=true},
+    reads={"GetDrawLayer"},writes={"SetDrawLayer"},signals={"SetDrawLayer"},aspects={},
+    help="Orders regions within their containing frame. This does not place a region behind every other frame.",
+    default={layer="BACKGROUND",sublevel=0},inputs={{"layer","Draw layer"},{"sublevel","Sublevel (-8..7)"}},
+    validate=function(v) return fields(v,{"layer","sublevel"},{function(x) return U.string(x,24) and P.layers[x] end,function(x) return num(x,-8,7) and x%1==0 end}) end,
+    read=function(a,o) local ok,l,s=a:read(o,"GetDrawLayer"); if ok then return {layer=l,sublevel=s} end end,
+    write=function(a,o,v) a:write(o,"SetDrawLayer",v.layer,v.sublevel) end})
 function P.applicable(d, kind) return d.types[kind] == true end
 function P.conflict(overrides)
     -- Vertex/text/bar colour alpha and SetAlpha share the Alpha aspect. Do not

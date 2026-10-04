@@ -32,6 +32,7 @@ local function check(parent,text,callback)
 end
 local function at(o,p,x,y) o:ClearAllPoints(); o:SetPoint("TOPLEFT",p,"TOPLEFT",x,-y) end
 local function show(o,on) if on then o:Show() else o:Hide() end end
+UI.widgets={label=label,panel=panel,button=button,input=input,check=check,at=at,show=show}
 function UI:tooltip(owner,text)
     if not self.tip then
         local f=CreateFrame("Frame",nil,UIParent); FC.adapter.owned[f]=true; self.tip=f
@@ -52,6 +53,8 @@ function UI:findRule(target)
     for id,r in pairs(FC.db.rules) do if U.joinTarget(r.target)==key then return id end end
 end
 function UI:select(o,id)
+    local visual=o and FC.adapter.visualIdentity and FC.adapter.visualIdentity[o]
+    if visual then self:editVisual(visual.visual); return end
     if o and FC.adapter:excluded(o) then return end
     self.object=o; self.id=id; self.property=nil; self.target=nil; self.identityReason=nil
     if o then
@@ -143,6 +146,7 @@ function UI:renderInspector()
         self.target=rule.target
         local o,why=FC.Resolver.resolve(FC.adapter,rule.target); self.object=o; self.identityReason=why
     end
+    if self.addAttached then show(self.addAttached,self.target~=nil and not self.target.visual and not FC.readOnlyData); show(self.attachedVisuals,self.target~=nil and not self.target.visual) end
     local kind=self.object and FC.adapter:kind(self.object) or (rule and rule.target.types[#rule.target.types])
     self.selection:SetText(self.object and FC.adapter:label(self.object).." ["..(kind or "?").."]" or self.target and U.joinTarget(self.target) or "Select an object in the hierarchy or use Pick")
     self.identity:SetText(self.identityReason or (rule and "Saved entry "..self.id.."  |  "..(kind or "unknown") or self.target and "Inspection only. Create an entry to enable overrides." or "Browse without modifying UI objects. Pick selects a frame; expand it to reach its regions."))
@@ -325,6 +329,7 @@ function UI:showList(title,items,onSelect,summary,refresh)
         f:SetScript("OnHide",function() self:hideTooltip() end)
     end
     local f=self.listFrame; f.items=items; f.onSelect=onSelect; f.refresh=refresh; f.offset=0; f.sourceIndex=1
+    f.source:Show()
     f.source.text:SetText("All sources"); f.title:SetText(title); f.summary:SetText(summary or ""); f.search:SetText(""); f:Show(); self:renderList()
 end
 function UI:renderList()
@@ -427,7 +432,7 @@ function UI:build()
         if self.object then FC.discovery:reveal(self.object) end
     end); at(hierarchy,f,192,54)
     local saved=button(f,"Saved entries",110,function() self.saved=true; self.offset=0; self.dirty=true end); at(saved,f,288,54)
-    self.pause=button(f,"Pause All",110,function() FC.SetPaused(not FC.db.paused); self:status(); self:message("Pause changes enforcement only. Existing visuals may require refresh /reload.") end); at(self.pause,f,406,54)
+    self.pause=button(f,"Pause All",110,function() FC.SetPaused(not FC.db.paused); self:status(); self:message("Paused overrides stop writing; created visuals retire when permitted. /reload completes recovery.") end); at(self.pause,f,406,54)
     local report=button(f,"Report",85,function() FC.ShowReport(self.id) end); at(report,f,524,54)
     self.search=input(f,235); at(self.search,f,16,99); self.search:SetScript("OnTextChanged",function() self.offset=0; FC.discovery:rows(self.search:GetText()); self.dirty=true end)
     self.search:SetScript("OnEditFocusGained",function() self:message("Search filters discovered labels, paths and types. Scan search explores more accessible branches.") end)
@@ -504,13 +509,14 @@ function UI:build()
         if self.id then text=text.."\n\n"..FC.engine:diagnostics(self.id) end
         self:report(text,"Geometry eligibility and enforcement")
     end); at(self.eligibilityReport,self.form,260,276)
-    self.help=label(f,"",11); at(self.help,f,365,576); self.help:SetWidth(220); self.help:SetHeight(90)
+    self.help=label(f,"",11); at(self.help,f,365,640); self.help:SetWidth(220); self.help:SetHeight(65)
     self.readout=label(self.form,"",11); at(self.readout,self.form,0,310); self.readout:SetPoint("TOPRIGHT",self.form,"TOPRIGHT",0,-310); self.readout:SetHeight(130)
     self.notice=label(f,"",11); self.notice:SetPoint("BOTTOMLEFT",365,62); self.notice:SetPoint("BOTTOMRIGHT",f,"BOTTOMRIGHT",-25,62); self.notice:SetHeight(42)
     self.globalStatus=label(f,"",11); self.globalStatus:SetPoint("BOTTOMLEFT",16,22); self.globalStatus:SetPoint("BOTTOMRIGHT",f,"BOTTOMRIGHT",-30,22); self.globalStatus:SetHeight(22)
     local resize=button(f,"/",22); resize:SetPoint("BOTTOMRIGHT",-3,3); resize:SetScript("OnMouseDown",function() f:StartSizing("BOTTOMRIGHT") end); resize:SetScript("OnMouseUp",function() f:StopMovingOrSizing(); self.dirty=true end)
     f:SetScript("OnSizeChanged",function() self.dirty=true end)
     f:SetScript("OnHide",function() if not self.picking and self.outline then self.outline:Hide() end; self:hideTooltip() end)
+    self:buildVisualControls()
     FC.discovery:refresh(); self:renderInspector(); self:renderRows()
 end
 function UI:toggle()

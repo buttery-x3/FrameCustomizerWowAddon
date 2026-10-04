@@ -26,7 +26,7 @@ function PG:show()
     FC.Editor.saved=false; FC.Editor.search:SetText("")
     FC.discovery:reveal(self.dev.root); FC.Editor:select(self.dev.root)
     local node=FC.discovery.map[self.dev.root]; if node and not node.expanded then FC.discovery:expand(node) end
-    FC.Print("Expand Art: Decoration = texture/blank, Label = fonts, Bar = fill media, SiblingAnchor / TwoAnchors = preserved position. Browse media shows library detection. /fcu playground reset resets cosmetics.")
+    FC.Print("Expand Art: Decoration = texture/blank, Label = fonts, Bar = fill media, SiblingAnchor / TwoAnchors = preserved position. Select Bar then Add visual for a full-bounds background; the top Add visual creates an independent panel. /fcu playground reset resets cosmetics.")
 end
 function PG:reset()
     local f=self.dev; if not f then return end
@@ -39,9 +39,10 @@ local function rule(target,property,value)
 end
 function PG:finish(note)
     local run=self.run; if not run then return end
-    run.engine:pause(true); run.engine.db.rules={}; run.engine:sync(); run.f.root:Hide()
+    run.engine:pause(true); run.engine.db.rules={}; run.engine.db.visuals={}; run.engine:sync(); run.visuals:changed(); run.visuals:tick(); run.f.root:Hide()
     run.f.root.Late=nil; run.f.root.Alias=nil
     run.report[#run.report+1]="Engine totals: writes="..run.engine.stats.writes.." checks="..run.engine.stats.checks.." errors="..run.engine.stats.errors.." installed hooks="..run.engine.stats.hooks
+    run.report[#run.report+1]=run.visuals:diagnostics()
     self.lastReport=table.concat(run.report,"\n").."\n"..(note or "Finished; fixture enforcement stopped and fixtures hidden.")
     self.run=nil
     FC.Editor:report(self.lastReport,"FrameCustomizer native fixture test report")
@@ -50,6 +51,7 @@ end
 function PG:startTests()
     if InCombatLockdown() then FC.Print("SKIPPED: /fcu test requires out-of-combat context."); return end
     if self.run then FC.Print("A fixture test is already running. /fcu test stop cancels it."); return end
+    if self.testVisuals and next(self.testVisuals.slots) then FC.Print("Previous fixture visual cleanup is pending. Retry once native access permits cleanup, or reload."); return end
     if not self.testFixtures then
         self.testFixtures=fixtures("FrameCustomizerTestFixtures"); FC.adapter.owned[self.testFixtures.root]=true
         self.testAdapter=FC.NativeAdapter.new(); self.testAdapter.fixtures[self.testFixtures.root]=true
@@ -67,7 +69,7 @@ function PG:startTests()
     f.bar:GetStatusBarTexture():SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
     local a=self.testAdapter; local target=FC.Resolver.describe(a,f.texture)
     if not target then FC.Editor:report("SKIPPED: native access/identity APIs unavailable. No fixture tests executed."); f.root:Hide(); return end
-    local db={version=1,paused=false,nextID=4,rules={
+    local db={version=2,paused=false,nextID=4,visuals={},nextVisualID=1,rules={
         r1=rule(target,"opacity",{alpha=0.25}),
         r2=rule(FC.Resolver.describe(a,f.text),"font",{face="Fonts\\FRIZQT__.TTF",size=19,flags="OUTLINE"}),
         r3=rule(FC.Resolver.describe(a,f.bar),"barColor",{r=0.8,g=0.2,b=0.4,a=1})}}
@@ -75,6 +77,8 @@ function PG:startTests()
     -- removed. Replacing an engine here would accumulate hooks each run.
     local e=self.testEngine
     if e then e.db=db; e:sync() else e=FC.Engine.new(a,db); self.testEngine=e end
+    local visuals=self.testVisuals
+    if visuals then visuals.db=db; visuals:changed() else visuals=FC.Visuals.new(a,db); self.testVisuals=visuals end
     local function alpha(o,value) local ok,n=a:read(o,"GetAlpha"); return ok and math.abs(n-value)<0.001 end
     local steps={}
     local function step(name,delay,act,check) steps[#steps+1]={name=name,delay=delay,act=act,check=check} end
@@ -171,16 +175,51 @@ function PG:startTests()
         self.savedPoint(f.stretch,"TOPLEFT",f.art,"BOTTOMLEFT",12,-6)
         self.savedPoint(f.stretch,"BOTTOMRIGHT",f.art,"BOTTOMRIGHT",-12,-14)
     end,geometryMatched)
-    step("Pause All stops queued and periodic writes",0.6,function() db.rules.r1.periodic=true; e:sync(); f.texture:SetAlpha(0.9); e:pause(true) end,function() return alpha(f.texture,0.9) end)
+    local visualID
+    local function visualReady()
+        local slot=visualID and visuals.slots[visualID]
+        if not slot or not slot.ready then return nil,slot and slot.status or "visual pending" end
+        return true,nil,slot
+    end
+    step("Independent click-through panel creation and shared layer properties",0.5,function()
+        visualID=visuals:save(nil,FC.Visuals.default()); e:sync()
+    end,function() return visualReady() end)
+    step("Attach panel to full status-bar bounds with padding",0.5,function()
+        if not visualID then return end
+        local v=FC.Visuals.default(FC.Resolver.describe(a,f.bar)); v.layout.left=-2; v.layout.right=-2
+        visuals:save(visualID,v); e:sync()
+    end,function()
+        local ok,why,slot=visualReady(); if not ok then return ok,why end
+        local good,n=a:read(slot.frame,"GetNumPoints"); return good and n==2 and f.bar:GetValue()==60
+    end)
+    step("Attached panel follows container visibility",0.5,function() f.root:Hide() end,function()
+        local slot=visualID and visuals.slots[visualID]; if not slot or not slot.ready then return nil,slot and slot.status or "visual pending" end
+        local ok,shown=a:read(slot.frame,"IsShown"); return ok and not shown
+    end)
+    step("Fixed panel dimensions remain independently authored",0.5,function()
+        f.root:Show()
+        if visualID then local v=FC.Util.copy(db.visuals[visualID]); v.layout.mode="fixed"; v.layout.width=320; v.layout.height=45; visuals:save(visualID,v); e:sync() end
+    end,function()
+        local ok,why,slot=visualReady(); if not ok then return ok,why end
+        local good,w,h=a:read(slot.frame,"GetSize"); return good and math.abs(w-320)<0.01 and math.abs(h-45)<0.01
+    end)
+    step("Pause All stops queued writes and retires created visuals",0.6,function() db.rules.r1.periodic=true; e:sync(); f.texture:SetAlpha(0.9); e:pause(true); visuals:changed() end,function()
+        if visualID and visuals.slots[visualID] then return nil,visuals.slots[visualID].status end
+        return alpha(f.texture,0.9)
+    end)
     local version,build,date,interface=GetBuildInfo()
-    self.run={f=f,engine=e,steps=steps,index=0,report={"FrameCustomizer "..FC.VERSION.." / "..FC.REVISION,
+    self.run={f=f,engine=e,visuals=visuals,steps=steps,index=0,report={"FrameCustomizer "..FC.VERSION.." / "..FC.REVISION,
         "Client "..version.." build "..build.." ("..date..") interface "..interface,
         "Native addon-owned fixtures ONLY; no protected Blizzard compatibility claim.",
         a:mediaDiagnostics(),
         "Secret values, protected operations, combat and rendering: SKIPPED (manual acceptance required)."}}
-    FC.Print("Running native fixture scenarios (~27 seconds). /fcu test stop cancels. Entering combat cancels.")
+    FC.Print("Running native fixture scenarios (~30 seconds). /fcu test stop cancels. Entering combat cancels.")
 end
 function PG:tick()
+    if self.testVisuals then
+        self.testVisuals:tick()
+        for _,slot in pairs(self.testVisuals.slots) do if slot.frame then FC.adapter.owned[slot.frame]=true end end
+    end
     local run=self.run; if not run then return end
     if InCombatLockdown() then self:finish("SKIPPED remaining scenarios: entered combat."); return end
     local now=GetTime()

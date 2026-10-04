@@ -43,14 +43,16 @@ function E:sync()
     local old=self.states
     for _,j in ipairs(self.jobs) do self:unwatch(j) end
     self.states={}; self.jobs={}; self.cursor=0
-    local ids={}; for id in pairs(self.db.rules) do ids[#ids+1]=id end; table.sort(ids)
+    local rules={}; for id,r in pairs(self.db.rules) do rules[id]=r end
+    if FC.Visuals then for id,r in pairs(FC.Visuals.rules(self.db)) do rules[id]=r end end
+    local ids={}; for id in pairs(rules) do ids[#ids+1]=id end; table.sort(ids)
     local targetCounts={}
     for _,id in ipairs(ids) do
-        local rule=self.db.rules[id]
+        local rule=rules[id]
         if rule.enabled then local key=U.joinTarget(rule.target); targetCounts[key]=(targetCounts[key] or 0)+1 end
     end
     for _,id in ipairs(ids) do
-        local rule=self.db.rules[id]
+        local rule=rules[id]
         local state={rule=rule,jobs={},status=rule.enabled and "pending" or "disabled",conflict=(targetCounts[U.joinTarget(rule.target)] or 0)>1}
         self.states[id]=state
         for _,d in ipairs(P.order) do
@@ -166,7 +168,9 @@ function E:process(j,now)
     j.due=now+FC.LIMITS.verify
     if periodic then j.due=math.min(j.due,(j.lastPeriodic or now)+interval) end
 end
-function E:tick()
+function E:tick(budget)
+    budget=budget or FC.LIMITS.jobs
+    if budget<=0 then return 0 end
     if self.db.paused then return 0 end
     local n=#self.jobs; if n==0 then return 0 end
     local now=self.a:now(); local work=0
@@ -180,7 +184,7 @@ function E:tick()
             if j.object then self.writing[j.object]=nil end
             if not ok and not self:deferred(j,err,now) then self.a:onError(err); self:failure(j) end
             work=work+1
-            if work>=FC.LIMITS.jobs then break end
+            if work>=budget then break end
         end
     end
     return work

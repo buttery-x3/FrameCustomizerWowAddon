@@ -7,6 +7,7 @@ FC.discovery=FC.Discovery.new(FC.adapter)
 function FC.SetPaused(paused)
     FrameCustomizerSafeMode=paused==true
     if FC.engine then FC.engine:pause(paused) end
+    if FC.visuals then FC.visuals:changed(); FC.visuals:tick() end
 end
 local lastReport=-100
 function FC.ShowReport(id)
@@ -14,6 +15,7 @@ function FC.ShowReport(id)
     lastReport=GetTime()
     local version,build,date,interface=GetBuildInfo()
     local report=FC.engine:diagnostics(id).."\nRuntime: "..version.." build "..build.." date "..date.." interface "..interface.."\nReference target: 1.60.1 / 70124 / 16001\n"
+    if FC.visuals then report=report..FC.visuals:diagnostics().."\n" end
     report=report.."No live property values, hook arguments, gameplay information or account/character data included.\n"
     report=report.."Media detection (library metadata only):\n"..FC.adapter:mediaDiagnostics().."\n"
     report=report.."Geometry findings: required native/access checks, anchor representation, FrameCustomizer Edit Mode policy, and scoped external-layout observations. Ordinary managers are advisory; successful preflight/setters do not prove lasting appearance.\n"
@@ -60,17 +62,18 @@ driver:SetScript("OnEvent",function(_,event,name)
         if FrameCustomizerSafeMode==true then FC.db.paused=true end
         if not FC.readOnlyData then FrameCustomizerDB=FC.db end
         FC.engine=FC.Engine.new(FC.adapter,FC.db)
+        FC.visuals=FC.Visuals.new(FC.adapter,FC.db)
         local _,build,_,interface=GetBuildInfo()
         if tostring(build)~="70124" or interface~=16001 then
             FC.SetPaused(true); FC.Print("Different client snapshot detected; rules start paused. Reference build: 70124 / interface 16001.")
         end
         if #FC.loadWarnings>0 then FC.Print(#FC.loadWarnings.." saved-data notices; /fcu report for details.") end
-    elseif FC.engine then FC.engine:lifecycle() end
+    elseif FC.engine then FC.engine:lifecycle(); FC.visuals:changed() end
 end)
 local elapsed=0
 driver:SetScript("OnUpdate",function(_,dt)
     elapsed=elapsed+dt
     if elapsed<0.05 then return end
     elapsed=0
-    if FC.engine then FC.engine:tick(); FC.Playground:tick(); FC.Editor:tick() end
+    if FC.engine then local work=FC.visuals:tick(); FC.engine:tick(FC.LIMITS.jobs-work); FC.Playground:tick(); FC.Editor:tick() end
 end)

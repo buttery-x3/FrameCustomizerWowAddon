@@ -6,13 +6,16 @@
 | --- | --- |
 | `FrameCustomizer/Core/Util.lua` | Small data helpers and injected value-access predicate |
 | `Core/Anchors.lua` | Validated anchor snapshots, stable relative identities, relationship checks and translation without clearing complex layouts |
-| `Core/Properties.lua` | Explicit applicability, reads, validation, coordinated writes, signals and repeatability for nine properties |
-| `Core/Schema.lua` | Version 1 validation, bounded rules, declarative round trips |
-| `Core/Resolver.lua` | Verified global/parent-key identity and type revalidation |
+| `Core/Properties.lua` | Explicit applicability, reads, validation, coordinated writes, signals and repeatability for eleven properties |
+| `Core/Schema.lua` | Schema 2 validation, schema 1 migration, bounded rules/visuals, declarative round trips |
+| `Core/Visuals.lua` | Visual definitions, runtime rule compilation, identity registry, bounded creation/retirement and reuse |
+| `Core/Resolver.lua` | Verified global/parent-key or registered visual identity and type revalidation |
 | `Core/Engine.lua` | Shared scheduler, hook subscriptions, verification, periodic writes, backoff, baseline undo, read-free diagnostics |
 | `Native/Adapter.lua` | WoW permissions, explicit read/write methods, assets and safe inspection |
+| `Native/Visuals.lua` | Guarded UIParent hosts, native attachment plans, visibility, owned layout and relative ordering |
 | `Native/Discovery.lua` | Lazy hierarchy, bounded search exploration and reference processing |
 | `UI/Editor.lua` | Reusable hierarchy rows, inspector, picker, assets and copyable reports |
+| `UI/VisualEditor.lua` | Shared independent/contextual creation form and all/attached visual management |
 | `Native/Playground.lua` | Opt-in editable fixtures and isolated native scenario engine |
 | `Bootstrap.lua` | SavedVariables, independent slash recovery, one update driver and lifecycle notifications |
 | `tests/` | Narrow fake adapter and strict native-API/UI call recorder; not a WoW emulator |
@@ -85,6 +88,20 @@ Diagnostic reports contain version/revision, runtime build, selected stable targ
 - Media lists are enumerated on picker open/refresh, not cached at startup. External library errors produce bounded status text and built-in fallback, never raw external values/errors in diagnostics. Stored values remain resolved file paths, not LSM keys. The 8x8 transparent TGA still needs native decode/render verification.
 - A saved target path identifies the named widget/parent slot, not displayed gameplay content. Anonymous or unverified pool objects remain read-only. Every write resolves again, rechecks type and current permissions, and rebinding discards the old session baseline.
 - Eligibility adds an optional fourth `canWrite` return containing independent findings; existing resolver/property/enforcement responsibilities and saved schema stay intact. Engine diagnostics format cached findings only. Each scan is bounded to 256 Edit Mode registrations and the existing 12-level ancestry limit.
-- One scheduler ticks no faster than 0.05s, checks at most 24 jobs and processes at most 12 jobs per tick. Up to 128 rules are allowed. A job is its own deduplicated pending record; callbacks only mark it dirty. A property job may coordinate several native setters. Hook count caps at 1024 per engine, after which readable verification and periodic enforcement remain available.
+- One production driver ticks no faster than 0.05s. At most four visual lifecycle jobs consume part of its twelve-job work budget; property jobs use the remainder. Each scheduler scans at most 24 records per tick. Up to 128 existing-object rules and 64 visual definitions are allowed. Visual appearance jobs are compiled at runtime into the existing engine; settings are saved once in the visual definition. A job may coordinate several native setters. Hook count caps at 1024 per engine, after which verification remains available. The opt-in fixture engine/controller are separate test infrastructure.
+
+## Created visual implementation (0.4.0)
+
+The registry resolves `visual:vN/frame` and `visual:vN/texture` only while a slot is ready. These are runtime descriptors, never global aliases or parent-key guesses. Existing-object schema targets cannot name created components, preventing a second saved geometry/appearance rule from fighting the visual definition. Discovery labels registered components, but selection routes to the visual editor. Editor/test infrastructure stays excluded.
+
+Each host is parented once to UIParent, owns a single texture, has mouse input disabled and fixed frame strata/level, and anchors to either the screen or the resolved target. Target visibility uses a separately resolved container (or target frame / immediate containing frame). The implementation does not reparent native Blizzard objects, create children on them, infer visibility from alpha, copy target gameplay data, or invoke layout/reset methods. Clipping and target alpha are intentionally not inherited.
+
+Created layout owns its anchor topology, so it can clear/rebuild its own anchors after checking the complete relative plan and native permissions. Existing-object anchor preservation remains unchanged. Shared properties implement media, tint, frame strata/level and draw layer/sublevel. Manual layers use normal engine jobs; relative behind ordering is computed from safe current target-frame metadata and applied through the same property definition by the lifecycle controller. Behind cannot represent a lower level than zero and never silently changes strata.
+
+Readiness/visibility is sampled at minimum 0.2s intervals; configured layout and appearance are compared at minimum 2s intervals. Layer/target changes invalidate configuration. No per-visual OnUpdate or permanent target hook is added. Retirement continues while globally paused, hides the host, clears external anchors and only then returns it to a pool. Failed/denied retirement remains bounded and visible in diagnostics. Native allocations, including partially created hosts, reserve one of 64 session slots; unknown failures cannot allocate around that limit. Retrying a saved visual clears its error suspension; three unexpected errors suspend normal processing. Permission deferrals do not count as errors.
+
+Schema 1 migrates to a new schema 2 copy; existing validated rules and pause/enable state retain their meaning. High-water IDs survive deletion and reload. Malformed top-level data or future versions remain preserved, paused and read-only. Individual malformed records retain the existing skip-and-report convention. Older addons reject schema 2 rather than stripping visuals. There is no automatic downgrade conversion.
+
+The native fixture suite reuses its visual controller, pool and engine across runs, exercises independent/attached creation, fixed/fill sizing, visibility and pause, and continues pending retirement after cancellation. Native frame rendering, scale, clipping boundaries, behind ordering, cleanup restrictions and UI layout still need client testing; recorder assertions are not a renderer or security emulator.
 
 See [SOURCE_NOTES.md](SOURCE_NOTES.md) for the exact input fingerprint and source contracts, and [TEST_RESULTS.md](TEST_RESULTS.md) for executed checks versus untested native behaviour.

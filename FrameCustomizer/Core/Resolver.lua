@@ -2,6 +2,13 @@ local _, FC = ...
 local R={}
 FC.Resolver=R
 function R.resolve(a,t)
+    if t.visual then
+        local slot=a.visualObjects and a.visualObjects[t.visual]
+        local o=slot and slot.ready and slot[t.part]
+        if not o then return nil,"unresolved: visual is not ready" end
+        if not a:inspectable(o) or a:kind(o)~=t.types[1] then return nil,"blocked: visual component inaccessible" end
+        return o
+    end
     local o,why=a:global(t.root)
     if not o then return nil,why or "unresolved" end
     for i=1,#t.types do
@@ -19,6 +26,9 @@ function R.resolve(a,t)
     return o
 end
 function R.describe(a,o)
+    if not a:inspectable(o) then return nil,"Restricted or inaccessible object" end
+    local identity=a.visualIdentity and a.visualIdentity[o]
+    if identity then return FC.Util.copy(identity) end
     local keys,types,seen={},{},{}
     if a:excluded(o) then return nil,"Editor/root infrastructure is not an editable target" end
     for _=0,FC.LIMITS.depth do

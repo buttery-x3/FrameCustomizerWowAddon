@@ -132,11 +132,11 @@ end)
 test("all implemented property families execute production definitions",function()
     for _,d in ipairs(P.order) do
         local a=F.new(); local kind
-        if d.id=="font" or d.id=="textColor" then kind="FontString" elseif d.id=="barTexture" or d.id=="barColor" then kind="StatusBar" else kind="Texture" end
+        if d.id=="frameLayer" then kind="Frame" elseif d.id=="font" or d.id=="textColor" then kind="FontString" elseif d.id=="barTexture" or d.id=="barColor" then kind="StatusBar" else kind="Texture" end
         local parent=a:object("Parent","Frame"); local o=a:object("Child",kind,parent); o.fill=a:object(nil,"Texture",o)
         local value=U.copy(d.default)
         if d.id=="opacity" then value.alpha=0.4 elseif d.id=="font" then value.size=22 elseif d.id=="texture" then value.asset="different"
-        elseif d.id=="barTexture" then value.asset="different" elseif value.r then value.r=0.1 elseif d.id=="position" then value.x=22 end
+        elseif d.id=="barTexture" then value.asset="different" elseif value.r then value.r=0.1 elseif d.id=="position" then value.x=22 elseif d.id=="frameLayer" then value.level=3 end
         local db={paused=false,rules={r1=rule(target("Child",kind),{[d.id]={enabled=true,value=value}})}}
         local e=E.new(a,db); e:tick(); assert(#a.writeLog>0,d.id.." never applied"); assert(not e.states.r1.jobs[d.id].suspended)
         if d.id=="barTexture" then eq(o.writeCount,0); eq(o.fill.values.texture,"different") end

@@ -1,6 +1,6 @@
 local _, FC = ...
 local U,P = FC.Util,FC.Properties
-local S = {version=1}
+local S = {version=2}
 FC.Schema=S
 function S.target(t)
     local root,keys,types=U.field(t,"root"),U.field(t,"keys"),U.field(t,"types")
@@ -41,16 +41,16 @@ function S.rule(raw)
     return r,nil,warnings
 end
 function S.load(raw)
-    local db={version=S.version,paused=false,nextID=1,rules={}}
+    local db={version=S.version,paused=false,nextID=1,rules={},visuals={},nextVisualID=1}
     local warnings={}
     if U.safe(raw) and raw==nil then return db,warnings end
-    if U.field(raw,"version")~=S.version then
+    if U.field(raw,"version")~=S.version and U.field(raw,"version")~=1 then
         db.paused=true
         return db,{"Unknown or malformed schema: original saved variable preserved; editor is read-only"},true
     end
     db.paused=U.field(raw,"paused")~=false
     local rules=U.field(raw,"rules")
-    if type(rules)~="table" then return db,{"Rules table missing; no entries loaded"} end
+    if type(rules)~="table" then db.paused=true; return db,{"Rules table missing; original saved variable preserved"},true end
     local count,seen=0,{}
     for id,r in pairs(rules) do
         count=count+1
@@ -68,6 +68,27 @@ function S.load(raw)
                 for _,note in ipairs(notes) do warnings[#warnings+1]=id..": "..note end
             else warnings[#warnings+1]=id..": skipped ("..reason..")" end
         else warnings[#warnings+1]="Skipped entry with invalid rule id" end
+    end
+    local visuals=U.field(raw,"visuals")
+    if U.field(raw,"version")==2 and visuals~=nil then
+        if type(visuals)~="table" then db.paused=true; return db,{"Malformed visuals table: original saved variable preserved"},true end
+        local count=0
+        for id,v in pairs(visuals) do
+            count=count+1
+            if count>FC.LIMITS.visuals then warnings[#warnings+1]="Visual limit reached (64)"; break end
+            if U.string(id,16) and id:match("^v%d+$") then
+                local valid,why=FC.Visuals.validate(v)
+                if valid then
+                    db.visuals[id]=valid
+                    db.nextVisualID=math.max(db.nextVisualID,math.min(1000000000,tonumber(id:sub(2)) or 0)+1)
+                else warnings[#warnings+1]=id..": skipped ("..why..")" end
+            else warnings[#warnings+1]="Skipped invalid visual ID" end
+        end
+    end
+    -- Never reuse deleted identities on reload. Version 1 settings stay intact.
+    for _,key in ipairs({"nextID","nextVisualID"}) do
+        local n=U.field(raw,key)
+        if U.number(n,1,1000000001) and n%1==0 then db[key]=math.max(db[key],n) end
     end
     return db,warnings
 end
